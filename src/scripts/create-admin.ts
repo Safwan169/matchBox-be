@@ -33,6 +33,7 @@ async function main() {
       name: values.name,
       email: values.email,
       phone: "",
+      address: null,
       role: "admin",
       dateOfBirth: new Date(`${values.dob}T00:00:00Z`),
       passwordHash: await bcrypt.hash(values.password, 12),

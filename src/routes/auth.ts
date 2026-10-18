@@ -7,6 +7,7 @@ import { requireAuth } from "../middleware/auth.js";
 import { HttpError } from "../middleware/error-handler.js";
 import { repositories } from "../repositories/index.js";
 import { endSession, startSession } from "../services/session.js";
+import { bdPhone, savedAddressSchema } from "../utils/validation.js";
 
 export const authRouter = Router();
 
@@ -21,13 +22,11 @@ const authLimiter = rateLimit({
 
 const email = z.string().trim().toLowerCase().email().max(254);
 const password = z.string().min(8, "Password must be at least 8 characters").max(128);
-const phone = z.string().trim().max(20).regex(/^[0-9+\-\s]*$/, "Invalid phone number");
-
 const registerSchema = z.object({
   name: z.string().trim().min(2).max(80),
   email,
   password,
-  phone: phone.default(""),
+  phone: bdPhone,
   dateOfBirth: z.iso.date().transform((d) => new Date(`${d}T00:00:00Z`)),
 });
 
@@ -35,7 +34,8 @@ const loginSchema = z.object({ email, password: z.string().min(1).max(128) });
 
 const updateMeSchema = z.object({
   name: z.string().trim().min(2).max(80).optional(),
-  phone: phone.optional(),
+  phone: bdPhone.optional(),
+  address: savedAddressSchema.nullable().optional(),
 });
 
 const changePasswordSchema = z.object({
@@ -52,6 +52,7 @@ authRouter.post("/register", authLimiter, async (req, res) => {
 
   const user = await repositories.users.create({
     ...data,
+    address: null,
     dateOfBirth,
     role: "customer",
     passwordHash: await bcrypt.hash(password, 12),

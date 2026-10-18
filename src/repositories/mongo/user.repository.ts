@@ -12,6 +12,18 @@ const userSchema = new Schema(
     passwordHash: { type: String, required: true },
     role: { type: String, enum: ["customer", "admin"], default: "customer", index: true },
     dateOfBirth: { type: Date, required: true },
+    address: {
+      type: new Schema(
+        {
+          addressLine: { type: String, required: true },
+          area: { type: String, default: "" },
+          city: { type: String, required: true },
+          postalCode: { type: String, default: "" },
+        },
+        { _id: false },
+      ),
+      default: null,
+    },
   },
   { timestamps: true },
 );
@@ -30,6 +42,14 @@ function toUser(doc: UserDoc): User {
     name: doc.name,
     email: doc.email,
     phone: doc.phone,
+    address: doc.address
+      ? {
+          addressLine: doc.address.addressLine,
+          area: doc.address.area,
+          city: doc.address.city,
+          postalCode: doc.address.postalCode,
+        }
+      : null,
     role: doc.role,
     dateOfBirth: doc.dateOfBirth,
     createdAt: doc.createdAt,

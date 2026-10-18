@@ -1,10 +1,19 @@
 export type UserRole = "customer" | "admin";
 
+/** Default delivery address saved on the account. */
+export interface SavedAddress {
+  addressLine: string;
+  area: string;
+  city: string;
+  postalCode: string;
+}
+
 export interface User {
   id: string;
   name: string;
   email: string;
   phone: string;
+  address: SavedAddress | null;
   role: UserRole;
   dateOfBirth: Date;
   createdAt: Date;
@@ -16,7 +25,7 @@ export interface UserWithPassword extends User {
 }
 
 export type NewUser = Omit<UserWithPassword, "id" | "createdAt" | "updatedAt">;
-export type UserUpdate = Partial<Pick<User, "name" | "phone" | "role">>;
+export type UserUpdate = Partial<Pick<User, "name" | "phone" | "role" | "address">>;
 
 export const MIN_AGE = 18;
 

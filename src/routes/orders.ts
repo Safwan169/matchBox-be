@@ -5,6 +5,7 @@ import { requireAuth } from "../middleware/auth.js";
 import { HttpError, NotFoundError } from "../middleware/error-handler.js";
 import { repositories } from "../repositories/index.js";
 import { changeOrderStatus, placeOrder, quoteOrder } from "../services/orders.js";
+import { bdPhone, savedAddressSchema } from "../utils/validation.js";
 
 export const ordersRouter = Router();
 ordersRouter.use(requireAuth);
@@ -21,13 +22,9 @@ const linesSchema = z
 
 const text = (max: number) => z.string().trim().max(max);
 
-const addressSchema = z.object({
+const addressSchema = savedAddressSchema.extend({
   fullName: text(80).min(2),
-  phone: text(20).regex(/^[0-9+\-\s]{6,20}$/, "Invalid phone number"),
-  addressLine: text(200).min(5),
-  area: text(80).default(""),
-  city: text(60).min(2),
-  postalCode: text(12).default(""),
+  phone: bdPhone,
 });
 
 const quoteSchema = z.object({ items: linesSchema, city: text(60).default("") });
@@ -36,6 +33,8 @@ const placeSchema = z.object({
   items: linesSchema,
   shippingAddress: addressSchema,
   notes: text(500).default(""),
+  // Remember this address as the account's default for next time.
+  saveAddress: z.boolean().default(true),
 });
 
 const listSchema = z.object({
@@ -49,8 +48,18 @@ ordersRouter.post("/quote", async (req, res) => {
 });
 
 ordersRouter.post("/", async (req, res) => {
-  const { items, shippingAddress, notes } = placeSchema.parse(req.body);
-  const order = await placeOrder({ userId: req.user!.id, lines: items, shippingAddress, notes });
+  const { items, shippingAddress, notes, saveAddress } = placeSchema.parse(req.body);
+  const user = req.user!;
+  const order = await placeOrder({ userId: user.id, lines: items, shippingAddress, notes });
+
+  if (saveAddress) {
+    const { addressLine, area, city, postalCode, phone } = shippingAddress;
+    await repositories.users.update(user.id, {
+      address: { addressLine, area, city, postalCode },
+      // Fill in the account phone for older accounts that don't have one yet.
+      ...(user.phone ? {} : { phone }),
+    });
+  }
   res.status(201).json({ data: order });
 });
 
