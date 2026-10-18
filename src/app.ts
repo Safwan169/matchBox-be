@@ -8,6 +8,7 @@ import { errorHandler, notFoundHandler } from "./middleware/error-handler.js";
 import { authRouter } from "./routes/auth.js";
 import { categoriesRouter } from "./routes/categories.js";
 import { healthRouter } from "./routes/health.js";
+import { ordersRouter } from "./routes/orders.js";
 import { productsRouter } from "./routes/products.js";
 
 export function createApp() {
@@ -24,6 +25,7 @@ export function createApp() {
   app.use("/api/auth", authRouter);
   app.use("/api/categories", categoriesRouter);
   app.use("/api/products", productsRouter);
+  app.use("/api/orders", ordersRouter);
 
   app.use(notFoundHandler);
   app.use(errorHandler);

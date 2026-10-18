@@ -94,8 +94,24 @@ export const mongoProductRepository: ProductRepository = {
     const doc = await ProductModel.findOne({ slug, isActive: true }).lean<ProductDoc>();
     return doc ? toProduct(doc) : null;
   },
+  async findByIds(ids) {
+    const valid = ids.filter((id) => mongoose.isValidObjectId(id));
+    const docs = await ProductModel.find({ _id: { $in: valid } }).lean<ProductDoc[]>();
+    return docs.map(toProduct);
+  },
   async create(data) {
     const doc = await ProductModel.create(data);
     return toProduct(doc.toObject() as ProductDoc);
+  },
+  async decrementStock(id, quantity) {
+    // The stock condition and the decrement happen in one atomic update.
+    const result = await ProductModel.updateOne(
+      { _id: id, isActive: true, stock: { $gte: quantity } },
+      { $inc: { stock: -quantity } },
+    );
+    return result.modifiedCount === 1;
+  },
+  async incrementStock(id, quantity) {
+    await ProductModel.updateOne({ _id: id }, { $inc: { stock: quantity } });
   },
 };
