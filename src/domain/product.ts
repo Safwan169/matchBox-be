@@ -5,11 +5,14 @@ export interface Product {
   name: string;
   slug: string;
   description: string;
-  category: string;
-  price: number; // smallest currency unit (e.g. paisa/cents)
+  categoryId: string;
+  brand: string;
+  price: number; // smallest currency unit (BDT poisha: 35000 = ৳350)
+  compareAtPrice: number | null; // original price when on sale
   stock: number;
   images: string[];
   ageRestricted: boolean;
+  isFeatured: boolean;
   isActive: boolean;
   createdAt: Date;
   updatedAt: Date;

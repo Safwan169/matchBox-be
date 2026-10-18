@@ -5,7 +5,7 @@ const notImplemented = (): never => {
 };
 
 export const postgresProductRepository: ProductRepository = {
-  findAll: async () => notImplemented(),
+  list: async () => notImplemented(),
   findBySlug: async () => notImplemented(),
   create: async () => notImplemented(),
 };
