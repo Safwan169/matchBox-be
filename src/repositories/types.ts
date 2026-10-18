@@ -12,6 +12,8 @@ export interface ProductQuery {
   categoryId?: string;
   search?: string;
   featured?: boolean;
+  /** Product ids to leave out (e.g. the product being viewed). */
+  excludeIds?: string[];
   /** "active" (default, storefront), "inactive" or "all" (admin). */
   status?: "active" | "inactive" | "all";
   sort: ProductSort;

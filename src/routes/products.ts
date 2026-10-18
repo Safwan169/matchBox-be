@@ -33,6 +33,38 @@ productsRouter.get("/", async (req, res) => {
   res.json({ data: items, meta });
 });
 
+// "You may also like": same category first, then featured/newest products to fill up.
+productsRouter.get("/:slug/related", async (req, res) => {
+  const { limit } = z.object({ limit: z.coerce.number().int().min(1).max(12).default(4) }).parse(req.query);
+  const product = await repositories.products.findBySlug(req.params.slug);
+  if (!product) throw new NotFoundError("Product not found");
+
+  const sameCategory = await repositories.products.list({
+    categoryId: product.categoryId,
+    excludeIds: [product.id],
+    sort: "newest",
+    page: 1,
+    limit,
+  });
+  const related = [...sameCategory.items];
+
+  for (const featured of [true, undefined]) {
+    if (related.length >= limit) break;
+    const more = await repositories.products.list({
+      featured,
+      excludeIds: [product.id, ...related.map((p) => p.id)],
+      sort: "newest",
+      page: 1,
+      limit: limit - related.length,
+    });
+    related.push(...more.items);
+  }
+
+  // In-stock items first; keep the original order otherwise.
+  related.sort((a, b) => Number(b.stock > 0) - Number(a.stock > 0));
+  res.json({ data: related });
+});
+
 productsRouter.get("/:slug", async (req, res) => {
   const product = await repositories.products.findBySlug(req.params.slug);
   if (!product) throw new NotFoundError("Product not found");
