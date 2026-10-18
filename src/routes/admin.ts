@@ -7,6 +7,7 @@ import { repositories } from "../repositories/index.js";
 import { changeOrderStatus } from "../services/orders.js";
 import { finalizeUpload, imageUpload } from "../services/uploads.js";
 import { SLUG_PATTERN, slugify } from "../utils/slugify.js";
+import { optionalBdPhone } from "../utils/validation.js";
 
 export const adminRouter = Router();
 adminRouter.use(requireAdmin);
@@ -184,6 +185,30 @@ adminRouter.patch("/orders/:id/status", async (req, res) => {
   const order = await repositories.orders.findById(req.params.id);
   if (!order) throw new NotFoundError("Order not found");
   res.json({ data: await changeOrderStatus(order, status) });
+});
+
+// ---------- Store settings ----------
+
+const settingsSchema = z
+  .object({
+    phone: optionalBdPhone,
+    whatsapp: optionalBdPhone,
+    email: z.union([z.literal(""), z.string().trim().toLowerCase().email().max(254)]),
+    address: z.string().trim().max(300),
+    facebookUrl: z.union([
+      z.literal(""),
+      z.string().trim().max(300).regex(/^https:\/\/(www\.|m\.)?(facebook|fb)\.com\/\S+$/, "Use a https://facebook.com/… link"),
+    ]),
+  })
+  .partial();
+
+adminRouter.get("/settings", async (_req, res) => {
+  res.json({ data: await repositories.settings.get() });
+});
+
+adminRouter.patch("/settings", async (req, res) => {
+  const data = settingsSchema.parse(req.body);
+  res.json({ data: await repositories.settings.update(data) });
 });
 
 // ---------- Customers ----------

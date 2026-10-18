@@ -14,6 +14,14 @@ export const bdPhone = z
   .pipe(z.string().regex(/^(?:\+?88)?01[3-9]\d{8}$/, "Enter a valid Bangladeshi mobile number (01XXXXXXXXX)"))
   .transform((v) => v.slice(-11));
 
+/** Same as bdPhone, but an empty string is allowed (meaning "not set"). */
+export const optionalBdPhone = z
+  .string()
+  .trim()
+  .transform((v) => v.replace(/[\s-]/g, ""))
+  .refine((v) => v === "" || /^(?:\+?88)?01[3-9]\d{8}$/.test(v), "Enter a valid Bangladeshi mobile number (01XXXXXXXXX)")
+  .transform((v) => v.slice(-11));
+
 /** Delivery address saved on the customer's account (name/phone live on the account itself). */
 export const savedAddressSchema = z.object({
   addressLine: text(200).min(5, "Address is too short"),

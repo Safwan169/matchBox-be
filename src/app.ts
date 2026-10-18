@@ -11,6 +11,7 @@ import { categoriesRouter } from "./routes/categories.js";
 import { healthRouter } from "./routes/health.js";
 import { ordersRouter } from "./routes/orders.js";
 import { productsRouter } from "./routes/products.js";
+import { settingsRouter } from "./routes/settings.js";
 import { UPLOAD_DIR, UPLOAD_URL_PREFIX } from "./services/uploads.js";
 
 export function createApp() {
@@ -39,6 +40,7 @@ export function createApp() {
   app.use("/api/categories", categoriesRouter);
   app.use("/api/products", productsRouter);
   app.use("/api/orders", ordersRouter);
+  app.use("/api/settings", settingsRouter);
   app.use("/api/admin", adminRouter);
 
   app.use(notFoundHandler);

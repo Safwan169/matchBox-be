@@ -1,6 +1,7 @@
 import type { Category, NewCategory } from "../domain/category.js";
 import type { NewOrder, Order, OrderStatus, PaymentStatus } from "../domain/order.js";
 import type { Paginated } from "../domain/pagination.js";
+import type { StoreSettings, StoreSettingsUpdate } from "../domain/settings.js";
 import type { NewProduct, Product } from "../domain/product.js";
 import type { NewUser, User, UserRole, UserUpdate, UserWithPassword } from "../domain/user.js";
 
@@ -100,9 +101,16 @@ export interface OrderRepository {
   countByUsers(userIds: string[]): Promise<Record<string, number>>;
 }
 
+export interface SettingsRepository {
+  /** Current settings; defaults (empty values) if never saved. */
+  get(): Promise<StoreSettings>;
+  update(data: StoreSettingsUpdate): Promise<StoreSettings>;
+}
+
 export interface Repositories {
   products: ProductRepository;
   categories: CategoryRepository;
   users: UserRepository;
   orders: OrderRepository;
+  settings: SettingsRepository;
 }
