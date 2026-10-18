@@ -4,6 +4,7 @@ import type { Paginated } from "../domain/pagination.js";
 import type { StoreSettings, StoreSettingsUpdate } from "../domain/settings.js";
 import type { NewProduct, Product } from "../domain/product.js";
 import type { NewPromotion, Promotion } from "../domain/promotion.js";
+import type { RatingSummary, Review, ReviewStatus } from "../domain/review.js";
 import type { NewUser, User, UserRole, UserUpdate, UserWithPassword } from "../domain/user.js";
 
 export type ProductSort = "newest" | "price_asc" | "price_desc" | "name_asc";
@@ -42,6 +43,7 @@ export interface ProductRepository {
   /** Atomically takes `quantity` from stock. Returns false (and changes nothing) if not enough. */
   decrementStock(id: string, quantity: number): Promise<boolean>;
   incrementStock(id: string, quantity: number): Promise<void>;
+  setRating(id: string, ratingAverage: number, ratingCount: number): Promise<void>;
 }
 
 export interface CategoryRepository {
@@ -100,6 +102,8 @@ export interface OrderRepository {
     update: { status: OrderStatus; paymentStatus?: PaymentStatus },
   ): Promise<Order | null>;
   stats(): Promise<OrderStats>;
+  /** True if the user has a delivered order containing the product. */
+  hasDeliveredPurchase(userId: string, productId: string): Promise<boolean>;
   /** Number of orders per user id. */
   countByUsers(userIds: string[]): Promise<Record<string, number>>;
 }
@@ -121,6 +125,21 @@ export interface PromotionRepository {
   delete(id: string): Promise<boolean>;
 }
 
+export interface ReviewRepository {
+  /** Published reviews of a product, newest first. */
+  listForProduct(productId: string, page: { page: number; limit: number }): Promise<Paginated<Review>>;
+  /** All reviews (admin), newest first. */
+  list(query: { status?: ReviewStatus; page: number; limit: number }): Promise<Paginated<Review>>;
+  findById(id: string): Promise<Review | null>;
+  findByUserAndProduct(userId: string, productId: string): Promise<Review | null>;
+  /** Creates or updates the user's review of the product (one per user per product). */
+  upsert(data: Pick<Review, "productId" | "userId" | "authorName" | "rating" | "comment">): Promise<Review>;
+  setStatus(id: string, status: ReviewStatus): Promise<Review | null>;
+  delete(id: string): Promise<boolean>;
+  /** Average, count and 1–5 distribution of published reviews. */
+  summary(productId: string): Promise<RatingSummary>;
+}
+
 export interface Repositories {
   products: ProductRepository;
   categories: CategoryRepository;
@@ -128,4 +147,5 @@ export interface Repositories {
   orders: OrderRepository;
   settings: SettingsRepository;
   promotions: PromotionRepository;
+  reviews: ReviewRepository;
 }

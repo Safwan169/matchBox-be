@@ -6,6 +6,7 @@ import { uploadLimiter } from "../middleware/rate-limit.js";
 import { HttpError, NotFoundError } from "../middleware/error-handler.js";
 import { repositories } from "../repositories/index.js";
 import { changeOrderStatus } from "../services/orders.js";
+import { refreshProductRating } from "../services/reviews.js";
 import { finalizeUpload, imageUpload } from "../services/uploads.js";
 import { SLUG_PATTERN, slugify } from "../utils/slugify.js";
 import { optionalBdPhone } from "../utils/validation.js";
@@ -249,6 +250,35 @@ adminRouter.patch("/promotions/:id", async (req, res) => {
 
 adminRouter.delete("/promotions/:id", async (req, res) => {
   if (!(await repositories.promotions.delete(req.params.id))) throw new NotFoundError("Promotion not found");
+  res.status(204).end();
+});
+
+// ---------- Reviews (moderation) ----------
+
+const reviewListSchema = z.object({ ...pageSchema, status: z.enum(["published", "hidden"]).optional() });
+
+adminRouter.get("/reviews", async (req, res) => {
+  const query = reviewListSchema.parse(req.query);
+  const { items, ...meta } = await repositories.reviews.list(query);
+  // Attach product names for display.
+  const products = await repositories.products.findByIds([...new Set(items.map((r) => r.productId))]);
+  const byId = new Map(products.map((p) => [p.id, { name: p.name, slug: p.slug }]));
+  res.json({ data: items.map((r) => ({ ...r, product: byId.get(r.productId) ?? null })), meta });
+});
+
+adminRouter.patch("/reviews/:id", async (req, res) => {
+  const { status } = z.object({ status: z.enum(["published", "hidden"]) }).parse(req.body);
+  const review = await repositories.reviews.setStatus(req.params.id, status);
+  if (!review) throw new NotFoundError("Review not found");
+  await refreshProductRating(review.productId);
+  res.json({ data: review });
+});
+
+adminRouter.delete("/reviews/:id", async (req, res) => {
+  const review = await repositories.reviews.findById(req.params.id);
+  if (!review) throw new NotFoundError("Review not found");
+  await repositories.reviews.delete(review.id);
+  await refreshProductRating(review.productId);
   res.status(204).end();
 });
 

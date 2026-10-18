@@ -13,6 +13,7 @@ import { healthRouter } from "./routes/health.js";
 import { ordersRouter } from "./routes/orders.js";
 import { productsRouter } from "./routes/products.js";
 import { promotionsRouter } from "./routes/promotions.js";
+import { reviewsRouter } from "./routes/reviews.js";
 import { settingsRouter } from "./routes/settings.js";
 import { UPLOAD_DIR, UPLOAD_URL_PREFIX } from "./services/uploads.js";
 
@@ -42,6 +43,7 @@ export function createApp() {
   app.use("/api/health", healthRouter);
   app.use("/api/auth", authRouter);
   app.use("/api/categories", categoriesRouter);
+  app.use("/api/products/:slug/reviews", reviewsRouter);
   app.use("/api/products", productsRouter);
   app.use("/api/orders", ordersRouter);
   app.use("/api/settings", settingsRouter);

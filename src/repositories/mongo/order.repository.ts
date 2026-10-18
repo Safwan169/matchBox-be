@@ -126,6 +126,11 @@ export const mongoOrderRepository: OrderRepository = {
     }).lean<OrderDoc>();
     return doc ? toOrder(doc) : null;
   },
+  async hasDeliveredPurchase(userId, productId) {
+    if (!mongoose.isValidObjectId(userId) || !mongoose.isValidObjectId(productId)) return false;
+    const found = await OrderModel.exists({ userId, status: "delivered", "items.productId": productId });
+    return found !== null;
+  },
   async stats() {
     const rows = await OrderModel.aggregate<{ _id: OrderStatus; count: number; revenue: number }>([
       { $group: { _id: "$status", count: { $sum: 1 }, revenue: { $sum: "$total" } } },

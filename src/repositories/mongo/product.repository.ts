@@ -17,6 +17,8 @@ const productSchema = new Schema(
     ageRestricted: { type: Boolean, default: true },
     isFeatured: { type: Boolean, default: false, index: true },
     isActive: { type: Boolean, default: true },
+    ratingAverage: { type: Number, default: 0 },
+    ratingCount: { type: Number, default: 0 },
   },
   { timestamps: true },
 );
@@ -51,6 +53,8 @@ function toProduct(doc: ProductDoc): Product {
     ageRestricted: doc.ageRestricted,
     isFeatured: doc.isFeatured,
     isActive: doc.isActive,
+    ratingAverage: doc.ratingAverage ?? 0,
+    ratingCount: doc.ratingCount ?? 0,
     createdAt: doc.createdAt,
     updatedAt: doc.updatedAt,
   };
@@ -151,6 +155,9 @@ export const mongoProductRepository: ProductRepository = {
       { $inc: { stock: -quantity } },
     );
     return result.modifiedCount === 1;
+  },
+  async setRating(id, ratingAverage, ratingCount) {
+    await ProductModel.updateOne({ _id: id }, { ratingAverage, ratingCount });
   },
   async incrementStock(id, quantity) {
     await ProductModel.updateOne({ _id: id }, { $inc: { stock: quantity } });

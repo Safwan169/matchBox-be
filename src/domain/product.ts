@@ -14,8 +14,10 @@ export interface Product {
   ageRestricted: boolean;
   isFeatured: boolean;
   isActive: boolean;
+  ratingAverage: number; // 0–5, from published reviews (kept in sync by the review service)
+  ratingCount: number;
   createdAt: Date;
   updatedAt: Date;
 }
 
-export type NewProduct = Omit<Product, "id" | "createdAt" | "updatedAt">;
+export type NewProduct = Omit<Product, "id" | "createdAt" | "updatedAt" | "ratingAverage" | "ratingCount">;
