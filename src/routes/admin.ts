@@ -187,6 +187,70 @@ adminRouter.patch("/orders/:id/status", async (req, res) => {
   res.json({ data: await changeOrderStatus(order, status) });
 });
 
+// ---------- Promotions (home page hero banners) ----------
+
+// Internal path ("/products/x") or an https URL. "//evil.com" is rejected.
+const promotionLink = z.union([
+  z.literal(""),
+  z.string().trim().max(500).regex(/^(\/(?!\/)\S*|https:\/\/\S+)$/, "Use a page path like /products/... or an https:// link"),
+]);
+const optionalDate = z.iso.datetime({ offset: true }).transform((d) => new Date(d)).nullable();
+
+const promotionFields = {
+  title: z.string().trim().min(2).max(100),
+  subtitle: z.string().trim().max(200),
+  image: imagePath,
+  buttonText: z.string().trim().max(40),
+  link: promotionLink,
+  showText: z.boolean(),
+  sortOrder: z.number().int().min(0).max(9999),
+  isActive: z.boolean(),
+  startsAt: optionalDate,
+  endsAt: optionalDate,
+};
+
+const checkDates = (p: { startsAt?: Date | null; endsAt?: Date | null }) =>
+  !p.startsAt || !p.endsAt || p.endsAt > p.startsAt;
+const DATES_MESSAGE = "End date must be after the start date";
+
+const createPromotionSchema = z
+  .object({
+    ...promotionFields,
+    subtitle: promotionFields.subtitle.default(""),
+    buttonText: promotionFields.buttonText.default(""),
+    link: promotionLink.default(""),
+    showText: promotionFields.showText.default(true),
+    sortOrder: promotionFields.sortOrder.default(0),
+    isActive: promotionFields.isActive.default(true),
+    startsAt: optionalDate.default(null),
+    endsAt: optionalDate.default(null),
+  })
+  .refine(checkDates, { error: DATES_MESSAGE, path: ["endsAt"] });
+
+const updatePromotionSchema = z.object(promotionFields).partial();
+
+adminRouter.get("/promotions", async (_req, res) => {
+  res.json({ data: await repositories.promotions.listAll() });
+});
+
+adminRouter.post("/promotions", async (req, res) => {
+  const data = createPromotionSchema.parse(req.body);
+  res.status(201).json({ data: await repositories.promotions.create(data) });
+});
+
+adminRouter.patch("/promotions/:id", async (req, res) => {
+  const data = updatePromotionSchema.parse(req.body);
+  const existing = await repositories.promotions.findById(req.params.id);
+  if (!existing) throw new NotFoundError("Promotion not found");
+  if (!checkDates({ ...existing, ...data })) throw new HttpError(400, DATES_MESSAGE);
+  res.json({ data: await repositories.promotions.update(req.params.id, data) });
+});
+
+adminRouter.delete("/promotions/:id", async (req, res) => {
+  if (!(await repositories.promotions.delete(req.params.id))) throw new NotFoundError("Promotion not found");
+  res.status(204).end();
+});
+
 // ---------- Store settings ----------
 
 const settingsSchema = z

@@ -3,11 +3,13 @@ import type { Repositories } from "./types.js";
 import { mongoCategoryRepository } from "./mongo/category.repository.js";
 import { mongoOrderRepository } from "./mongo/order.repository.js";
 import { mongoSettingsRepository } from "./mongo/settings.repository.js";
+import { mongoPromotionRepository } from "./mongo/promotion.repository.js";
 import { mongoProductRepository } from "./mongo/product.repository.js";
 import { mongoUserRepository } from "./mongo/user.repository.js";
 import { postgresCategoryRepository } from "./postgres/category.repository.js";
 import { postgresOrderRepository } from "./postgres/order.repository.js";
 import { postgresSettingsRepository } from "./postgres/settings.repository.js";
+import { postgresPromotionRepository } from "./postgres/promotion.repository.js";
 import { postgresProductRepository } from "./postgres/product.repository.js";
 import { postgresUserRepository } from "./postgres/user.repository.js";
 
@@ -20,6 +22,7 @@ export const repositories: Repositories =
         users: postgresUserRepository,
         orders: postgresOrderRepository,
         settings: postgresSettingsRepository,
+        promotions: postgresPromotionRepository,
       }
     : {
         products: mongoProductRepository,
@@ -27,4 +30,5 @@ export const repositories: Repositories =
         users: mongoUserRepository,
         orders: mongoOrderRepository,
         settings: mongoSettingsRepository,
+        promotions: mongoPromotionRepository,
       };

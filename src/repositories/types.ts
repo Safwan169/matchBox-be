@@ -3,6 +3,7 @@ import type { NewOrder, Order, OrderStatus, PaymentStatus } from "../domain/orde
 import type { Paginated } from "../domain/pagination.js";
 import type { StoreSettings, StoreSettingsUpdate } from "../domain/settings.js";
 import type { NewProduct, Product } from "../domain/product.js";
+import type { NewPromotion, Promotion } from "../domain/promotion.js";
 import type { NewUser, User, UserRole, UserUpdate, UserWithPassword } from "../domain/user.js";
 
 export type ProductSort = "newest" | "price_asc" | "price_desc" | "name_asc";
@@ -107,10 +108,22 @@ export interface SettingsRepository {
   update(data: StoreSettingsUpdate): Promise<StoreSettings>;
 }
 
+export interface PromotionRepository {
+  /** All promotions (admin), by sortOrder. */
+  listAll(): Promise<Promotion[]>;
+  /** Active promotions whose start/end window contains `now`, by sortOrder. */
+  listLive(now: Date): Promise<Promotion[]>;
+  findById(id: string): Promise<Promotion | null>;
+  create(data: NewPromotion): Promise<Promotion>;
+  update(id: string, data: Partial<NewPromotion>): Promise<Promotion | null>;
+  delete(id: string): Promise<boolean>;
+}
+
 export interface Repositories {
   products: ProductRepository;
   categories: CategoryRepository;
   users: UserRepository;
   orders: OrderRepository;
   settings: SettingsRepository;
+  promotions: PromotionRepository;
 }
