@@ -3,6 +3,7 @@ import type { NewOrder, Order, OrderStatus, PaymentStatus } from "../domain/orde
 import type { Paginated } from "../domain/pagination.js";
 import type { StoreSettings, StoreSettingsUpdate } from "../domain/settings.js";
 import type { NewProduct, Product } from "../domain/product.js";
+import type { HomeSection, NewHomeSection } from "../domain/home-section.js";
 import type { NewPromotion, Promotion } from "../domain/promotion.js";
 import type { RatingSummary, Review, ReviewStatus } from "../domain/review.js";
 import type { NewUser, User, UserRole, UserUpdate, UserWithPassword } from "../domain/user.js";
@@ -13,6 +14,8 @@ export interface ProductQuery {
   categoryId?: string;
   search?: string;
   featured?: boolean;
+  /** Only products with a compare-at price above the price. */
+  onSale?: boolean;
   /** Product ids to leave out (e.g. the product being viewed). */
   excludeIds?: string[];
   /** "active" (default, storefront), "inactive" or "all" (admin). */
@@ -140,6 +143,18 @@ export interface ReviewRepository {
   summary(productId: string): Promise<RatingSummary>;
 }
 
+export interface HomeSectionRepository {
+  /** All sections in display order. */
+  listAll(): Promise<HomeSection[]>;
+  count(): Promise<number>;
+  findById(id: string): Promise<HomeSection | null>;
+  createMany(data: NewHomeSection[]): Promise<HomeSection[]>;
+  update(id: string, data: Partial<NewHomeSection>): Promise<HomeSection | null>;
+  delete(id: string): Promise<boolean>;
+  /** Sets sortOrder to each id's position in the list. */
+  reorder(ids: string[]): Promise<void>;
+}
+
 export interface Repositories {
   products: ProductRepository;
   categories: CategoryRepository;
@@ -148,4 +163,5 @@ export interface Repositories {
   settings: SettingsRepository;
   promotions: PromotionRepository;
   reviews: ReviewRepository;
+  homeSections: HomeSectionRepository;
 }

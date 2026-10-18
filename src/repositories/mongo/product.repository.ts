@@ -61,7 +61,7 @@ function toProduct(doc: ProductDoc): Product {
 }
 
 export const mongoProductRepository: ProductRepository = {
-  async list({ categoryId, search, featured, excludeIds, status = "active", sort, page, limit }) {
+  async list({ categoryId, search, featured, onSale, excludeIds, status = "active", sort, page, limit }) {
     const filter: Record<string, unknown> = {};
     if (status !== "all") filter.isActive = status === "active";
     if (categoryId) {
@@ -72,6 +72,7 @@ export const mongoProductRepository: ProductRepository = {
       filter.categoryId = categoryId;
     }
     if (featured !== undefined) filter.isFeatured = featured;
+    if (onSale) filter.$expr = { $gt: ["$compareAtPrice", "$price"] };
     if (excludeIds?.length) filter._id = { $nin: excludeIds.filter((id) => mongoose.isValidObjectId(id)) };
     if (search) {
       const pattern = new RegExp(escapeRegex(search), "i");

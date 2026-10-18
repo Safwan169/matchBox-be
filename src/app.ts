@@ -10,6 +10,7 @@ import { adminRouter } from "./routes/admin.js";
 import { authRouter } from "./routes/auth.js";
 import { categoriesRouter } from "./routes/categories.js";
 import { healthRouter } from "./routes/health.js";
+import { homeSectionsRouter } from "./routes/home-sections.js";
 import { ordersRouter } from "./routes/orders.js";
 import { productsRouter } from "./routes/products.js";
 import { promotionsRouter } from "./routes/promotions.js";
@@ -48,6 +49,7 @@ export function createApp() {
   app.use("/api/orders", ordersRouter);
   app.use("/api/settings", settingsRouter);
   app.use("/api/promotions", promotionsRouter);
+  app.use("/api/home-sections", homeSectionsRouter);
   app.use("/api/admin", adminRouter);
 
   app.use(notFoundHandler);

@@ -6,6 +6,7 @@ import { uploadLimiter } from "../middleware/rate-limit.js";
 import { HttpError, NotFoundError } from "../middleware/error-handler.js";
 import { repositories } from "../repositories/index.js";
 import { changeOrderStatus } from "../services/orders.js";
+import { getHomeSections } from "../services/home-sections.js";
 import { refreshProductRating } from "../services/reviews.js";
 import { finalizeUpload, imageUpload } from "../services/uploads.js";
 import { SLUG_PATTERN, slugify } from "../utils/slugify.js";
@@ -280,6 +281,83 @@ adminRouter.delete("/reviews/:id", async (req, res) => {
   await repositories.reviews.delete(review.id);
   await refreshProductRating(review.productId);
   res.status(204).end();
+});
+
+// ---------- Home page sections ----------
+
+const sectionLimit = z.number().int().min(1).max(24).default(8);
+const sectionTitle = z.string().trim().max(80).default("");
+const sectionBase = { title: sectionTitle, isActive: z.boolean().default(true) };
+
+// Each section type has its own config shape.
+const sectionSchema = z.discriminatedUnion("type", [
+  z.object({ ...sectionBase, type: z.literal("hero"), config: z.object({}).strip().default({}) }),
+  z.object({ ...sectionBase, type: z.literal("categories"), config: z.object({}).strip().default({}) }),
+  z.object({ ...sectionBase, type: z.literal("featured_products"), config: z.object({ limit: sectionLimit }).default({ limit: 8 }) }),
+  z.object({ ...sectionBase, type: z.literal("new_arrivals"), config: z.object({ limit: sectionLimit }).default({ limit: 8 }) }),
+  z.object({ ...sectionBase, type: z.literal("on_sale"), config: z.object({ limit: sectionLimit }).default({ limit: 8 }) }),
+  z.object({
+    ...sectionBase,
+    type: z.literal("category_products"),
+    config: z.object({ categoryId: z.string({ error: "Choose a category" }).min(1, "Choose a category"), limit: sectionLimit }),
+  }),
+  z.object({
+    ...sectionBase,
+    type: z.literal("banner"),
+    config: z.object({ image: imagePath, link: promotionLink.default("") }),
+  }),
+  z.object({
+    ...sectionBase,
+    type: z.literal("text"),
+    config: z.object({ body: z.string().trim().min(1, "Write some text").max(2000) }),
+  }),
+]);
+
+async function assertSectionCategory(section: z.infer<typeof sectionSchema>) {
+  if (section.type === "category_products") await assertCategoryExists(section.config.categoryId);
+}
+
+adminRouter.get("/home-sections", async (_req, res) => {
+  res.json({ data: await getHomeSections() });
+});
+
+adminRouter.post("/home-sections", async (req, res) => {
+  const section = sectionSchema.parse(req.body);
+  await assertSectionCategory(section);
+  const sortOrder = (await getHomeSections()).length; // add to the end
+  const [created] = await repositories.homeSections.createMany([{ ...section, sortOrder }]);
+  res.status(201).json({ data: created });
+});
+
+adminRouter.patch("/home-sections/:id", async (req, res) => {
+  const existing = await repositories.homeSections.findById(req.params.id);
+  if (!existing) throw new NotFoundError("Section not found");
+  // Validate the merged result so a partial update can't produce an invalid section.
+  const body = z.object({ title: z.string().optional(), isActive: z.boolean().optional(), config: z.record(z.string(), z.unknown()).optional() }).parse(req.body);
+  const section = sectionSchema.parse({
+    type: existing.type,
+    title: body.title ?? existing.title,
+    isActive: body.isActive ?? existing.isActive,
+    config: body.config ?? existing.config,
+  });
+  await assertSectionCategory(section);
+  res.json({ data: await repositories.homeSections.update(existing.id, section) });
+});
+
+adminRouter.delete("/home-sections/:id", async (req, res) => {
+  if (!(await repositories.homeSections.delete(req.params.id))) throw new NotFoundError("Section not found");
+  res.status(204).end();
+});
+
+adminRouter.put("/home-sections/order", async (req, res) => {
+  const { ids } = z.object({ ids: z.array(z.string()).min(1).max(100) }).parse(req.body);
+  const current = await getHomeSections();
+  const known = new Set(current.map((s) => s.id));
+  if (ids.length !== current.length || new Set(ids).size !== ids.length || !ids.every((id) => known.has(id))) {
+    throw new HttpError(400, "The list must contain every section exactly once. Please refresh.");
+  }
+  await repositories.homeSections.reorder(ids);
+  res.json({ data: await getHomeSections() });
 });
 
 // ---------- Store settings ----------
