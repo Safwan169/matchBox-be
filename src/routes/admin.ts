@@ -2,6 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { ORDER_STATUSES } from "../domain/order.js";
 import { requireAdmin } from "../middleware/auth.js";
+import { uploadLimiter } from "../middleware/rate-limit.js";
 import { HttpError, NotFoundError } from "../middleware/error-handler.js";
 import { repositories } from "../repositories/index.js";
 import { changeOrderStatus } from "../services/orders.js";
@@ -39,7 +40,7 @@ adminRouter.get("/stats", async (_req, res) => {
 
 // ---------- Uploads ----------
 
-adminRouter.post("/uploads", imageUpload.single("image"), async (req, res) => {
+adminRouter.post("/uploads", uploadLimiter, imageUpload.single("image"), async (req, res) => {
   const url = await finalizeUpload(req.file);
   res.status(201).json({ data: { url } });
 });

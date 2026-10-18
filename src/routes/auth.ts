@@ -1,24 +1,15 @@
 import bcrypt from "bcryptjs";
 import { Router } from "express";
-import rateLimit from "express-rate-limit";
 import { z } from "zod";
 import { ageOn, MIN_AGE } from "../domain/user.js";
 import { requireAuth } from "../middleware/auth.js";
 import { HttpError } from "../middleware/error-handler.js";
+import { authLimiter } from "../middleware/rate-limit.js";
 import { repositories } from "../repositories/index.js";
 import { endSession, startSession } from "../services/session.js";
 import { bdPhone, savedAddressSchema } from "../utils/validation.js";
 
 export const authRouter = Router();
-
-// Slow down password guessing and mass sign-ups.
-const authLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  limit: 20,
-  standardHeaders: "draft-8",
-  legacyHeaders: false,
-  message: { error: "Too many attempts. Please try again later." },
-});
 
 const email = z.string().trim().toLowerCase().email().max(254);
 const password = z.string().min(8, "Password must be at least 8 characters").max(128);

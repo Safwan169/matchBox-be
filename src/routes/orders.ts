@@ -3,6 +3,7 @@ import { z } from "zod";
 import { shopConfig } from "../config/shop.js";
 import { requireAuth } from "../middleware/auth.js";
 import { HttpError, NotFoundError } from "../middleware/error-handler.js";
+import { orderLimiter, quoteLimiter } from "../middleware/rate-limit.js";
 import { repositories } from "../repositories/index.js";
 import { changeOrderStatus, placeOrder, quoteOrder } from "../services/orders.js";
 import { bdPhone, savedAddressSchema } from "../utils/validation.js";
@@ -42,12 +43,12 @@ const listSchema = z.object({
   limit: z.coerce.number().int().min(1).max(50).default(10),
 });
 
-ordersRouter.post("/quote", async (req, res) => {
+ordersRouter.post("/quote", quoteLimiter, async (req, res) => {
   const { items, city } = quoteSchema.parse(req.body);
   res.json({ data: await quoteOrder(items, city) });
 });
 
-ordersRouter.post("/", async (req, res) => {
+ordersRouter.post("/", orderLimiter, async (req, res) => {
   const { items, shippingAddress, notes, saveAddress } = placeSchema.parse(req.body);
   const user = req.user!;
   const order = await placeOrder({ userId: user.id, lines: items, shippingAddress, notes });

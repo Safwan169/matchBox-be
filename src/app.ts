@@ -4,6 +4,7 @@ import express from "express";
 import helmet from "helmet";
 import { env } from "./config/env.js";
 import { authenticate } from "./middleware/auth.js";
+import { apiLimiter } from "./middleware/rate-limit.js";
 import { errorHandler, notFoundHandler } from "./middleware/error-handler.js";
 import { adminRouter } from "./routes/admin.js";
 import { authRouter } from "./routes/auth.js";
@@ -18,7 +19,7 @@ import { UPLOAD_DIR, UPLOAD_URL_PREFIX } from "./services/uploads.js";
 export function createApp() {
   const app = express();
 
-  app.set("trust proxy", 1);
+  app.set("trust proxy", env.TRUST_PROXY);
   // Allow the storefront (another origin) to display uploaded images.
   app.use(helmet({ crossOriginResourcePolicy: { policy: "cross-origin" } }));
   app.use(cors({ origin: env.CORS_ORIGIN, credentials: true }));
@@ -32,6 +33,8 @@ export function createApp() {
     }),
   );
 
+  // Before parsing and auth, so floods are rejected cheaply.
+  app.use("/api", apiLimiter);
   app.use(express.json({ limit: "100kb" }));
   app.use(cookieParser());
   app.use(authenticate);
