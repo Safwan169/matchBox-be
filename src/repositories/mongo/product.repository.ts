@@ -1,6 +1,7 @@
 import mongoose, { Schema, type InferSchemaType, type SortOrder } from "mongoose";
 import type { Product } from "../../domain/product.js";
 import type { ProductRepository, ProductSort } from "../types.js";
+import { escapeRegex, rethrowDuplicate } from "./utils.js";
 
 const productSchema = new Schema(
   {
@@ -35,8 +36,6 @@ const sortMap: Record<ProductSort, Record<string, SortOrder>> = {
   name_asc: { name: 1 },
 };
 
-const escapeRegex = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-
 function toProduct(doc: ProductDoc): Product {
   return {
     id: doc._id.toString(),
@@ -58,8 +57,9 @@ function toProduct(doc: ProductDoc): Product {
 }
 
 export const mongoProductRepository: ProductRepository = {
-  async list({ categoryId, search, featured, sort, page, limit }) {
-    const filter: Record<string, unknown> = { isActive: true };
+  async list({ categoryId, search, featured, status = "active", sort, page, limit }) {
+    const filter: Record<string, unknown> = {};
+    if (status !== "all") filter.isActive = status === "active";
     if (categoryId) {
       // An invalid id can't match anything, so return an empty page instead of a cast error.
       if (!mongoose.isValidObjectId(categoryId)) {
@@ -94,14 +94,54 @@ export const mongoProductRepository: ProductRepository = {
     const doc = await ProductModel.findOne({ slug, isActive: true }).lean<ProductDoc>();
     return doc ? toProduct(doc) : null;
   },
+  async findById(id) {
+    if (!mongoose.isValidObjectId(id)) return null;
+    const doc = await ProductModel.findById(id).lean<ProductDoc>();
+    return doc ? toProduct(doc) : null;
+  },
   async findByIds(ids) {
     const valid = ids.filter((id) => mongoose.isValidObjectId(id));
     const docs = await ProductModel.find({ _id: { $in: valid } }).lean<ProductDoc[]>();
     return docs.map(toProduct);
   },
   async create(data) {
-    const doc = await ProductModel.create(data);
-    return toProduct(doc.toObject() as ProductDoc);
+    try {
+      const doc = await ProductModel.create(data);
+      return toProduct(doc.toObject() as ProductDoc);
+    } catch (err) {
+      rethrowDuplicate(err, "slug");
+    }
+  },
+  async update(id, data) {
+    if (!mongoose.isValidObjectId(id)) return null;
+    try {
+      const doc = await ProductModel.findByIdAndUpdate(id, data, {
+        returnDocument: "after",
+        runValidators: true,
+      }).lean<ProductDoc>();
+      return doc ? toProduct(doc) : null;
+    } catch (err) {
+      rethrowDuplicate(err, "slug");
+    }
+  },
+  async delete(id) {
+    if (!mongoose.isValidObjectId(id)) return false;
+    const result = await ProductModel.deleteOne({ _id: id });
+    return result.deletedCount === 1;
+  },
+  async countByCategory(categoryId) {
+    if (!mongoose.isValidObjectId(categoryId)) return 0;
+    return ProductModel.countDocuments({ categoryId });
+  },
+  async count() {
+    return ProductModel.countDocuments();
+  },
+  async listLowStock(threshold, limit) {
+    const docs = await ProductModel.find({ isActive: true, stock: { $lte: threshold } })
+      .sort({ stock: 1, name: 1 })
+      .limit(limit)
+      .lean<ProductDoc[]>();
+    return docs.map(toProduct);
   },
   async decrementStock(id, quantity) {
     // The stock condition and the decrement happen in one atomic update.

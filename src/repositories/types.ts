@@ -2,7 +2,7 @@ import type { Category, NewCategory } from "../domain/category.js";
 import type { NewOrder, Order, OrderStatus, PaymentStatus } from "../domain/order.js";
 import type { Paginated } from "../domain/pagination.js";
 import type { NewProduct, Product } from "../domain/product.js";
-import type { NewUser, User, UserUpdate, UserWithPassword } from "../domain/user.js";
+import type { NewUser, User, UserRole, UserUpdate, UserWithPassword } from "../domain/user.js";
 
 export type ProductSort = "newest" | "price_asc" | "price_desc" | "name_asc";
 
@@ -10,6 +10,8 @@ export interface ProductQuery {
   categoryId?: string;
   search?: string;
   featured?: boolean;
+  /** "active" (default, storefront), "inactive" or "all" (admin). */
+  status?: "active" | "inactive" | "all";
   sort: ProductSort;
   page: number;
   limit: number;
@@ -18,19 +20,42 @@ export interface ProductQuery {
 // Every database implementation must satisfy these interfaces.
 export interface ProductRepository {
   list(query: ProductQuery): Promise<Paginated<Product>>;
+  /** Active products only. */
   findBySlug(slug: string): Promise<Product | null>;
+  /** Any product, active or not. */
+  findById(id: string): Promise<Product | null>;
   /** Active and inactive products with the given ids; unknown ids are skipped. */
   findByIds(ids: string[]): Promise<Product[]>;
+  /** Throws DuplicateError("slug") if the slug is taken. */
   create(data: NewProduct): Promise<Product>;
+  /** Throws DuplicateError("slug") if the slug is taken. */
+  update(id: string, data: Partial<NewProduct>): Promise<Product | null>;
+  delete(id: string): Promise<boolean>;
+  countByCategory(categoryId: string): Promise<number>;
+  count(): Promise<number>;
+  /** Active products at or below the threshold, lowest stock first. */
+  listLowStock(threshold: number, limit: number): Promise<Product[]>;
   /** Atomically takes `quantity` from stock. Returns false (and changes nothing) if not enough. */
   decrementStock(id: string, quantity: number): Promise<boolean>;
   incrementStock(id: string, quantity: number): Promise<void>;
 }
 
 export interface CategoryRepository {
-  findAll(): Promise<Category[]>;
+  /** Active categories only, unless includeInactive is set. */
+  findAll(options?: { includeInactive?: boolean }): Promise<Category[]>;
   findBySlug(slug: string): Promise<Category | null>;
+  findById(id: string): Promise<Category | null>;
+  /** Throws DuplicateError("slug") if the slug is taken. */
   create(data: NewCategory): Promise<Category>;
+  update(id: string, data: Partial<NewCategory>): Promise<Category | null>;
+  delete(id: string): Promise<boolean>;
+}
+
+export interface UserQuery {
+  role?: UserRole;
+  search?: string; // name, email or phone
+  page: number;
+  limit: number;
 }
 
 export interface UserRepository {
@@ -40,6 +65,8 @@ export interface UserRepository {
   create(data: NewUser): Promise<User>;
   update(id: string, data: UserUpdate): Promise<User | null>;
   setPasswordHash(id: string, passwordHash: string): Promise<void>;
+  list(query: UserQuery): Promise<Paginated<User>>;
+  count(role?: UserRole): Promise<number>;
 }
 
 export interface OrderQuery {
@@ -48,6 +75,13 @@ export interface OrderQuery {
   search?: string; // order number, customer name or phone
   page: number;
   limit: number;
+}
+
+export interface OrderStats {
+  totalOrders: number;
+  /** Sum of order totals, excluding cancelled orders. */
+  revenue: number;
+  byStatus: Record<OrderStatus, number>;
 }
 
 export interface OrderRepository {
@@ -61,6 +95,9 @@ export interface OrderRepository {
     from: OrderStatus,
     update: { status: OrderStatus; paymentStatus?: PaymentStatus },
   ): Promise<Order | null>;
+  stats(): Promise<OrderStats>;
+  /** Number of orders per user id. */
+  countByUsers(userIds: string[]): Promise<Record<string, number>>;
 }
 
 export interface Repositories {

@@ -1,4 +1,5 @@
 import type { ErrorRequestHandler, RequestHandler } from "express";
+import { MulterError } from "multer";
 import { ZodError } from "zod";
 import { DuplicateError } from "../domain/errors.js";
 
@@ -33,6 +34,11 @@ export const errorHandler: ErrorRequestHandler = (err, _req, res, _next) => {
   }
   if (err instanceof DuplicateError) {
     res.status(409).json({ error: `This ${err.field} is already in use` });
+    return;
+  }
+  if (err instanceof MulterError) {
+    const message = err.code === "LIMIT_FILE_SIZE" ? "Image must be 5 MB or smaller" : err.message;
+    res.status(400).json({ error: message });
     return;
   }
   // Malformed JSON body from express.json()

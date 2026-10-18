@@ -1,0 +1,198 @@
+import { Router } from "express";
+import { z } from "zod";
+import { ORDER_STATUSES } from "../domain/order.js";
+import { requireAdmin } from "../middleware/auth.js";
+import { HttpError, NotFoundError } from "../middleware/error-handler.js";
+import { repositories } from "../repositories/index.js";
+import { changeOrderStatus } from "../services/orders.js";
+import { finalizeUpload, imageUpload } from "../services/uploads.js";
+import { SLUG_PATTERN, slugify } from "../utils/slugify.js";
+
+export const adminRouter = Router();
+adminRouter.use(requireAdmin);
+
+const LOW_STOCK_THRESHOLD = 5;
+
+const pageSchema = {
+  page: z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(100).default(20),
+};
+const optionalText = z.string().trim().min(1).max(100).optional();
+const slug = z.string().trim().toLowerCase().regex(SLUG_PATTERN, "Use lowercase letters, numbers and dashes");
+// Images are our own uploads or absolute https URLs.
+const imagePath = z.string().trim().regex(/^(\/uploads\/[\w.-]+|https:\/\/\S+)$/, "Invalid image URL");
+const money = z.number().int("Amount must be in poisha (whole number)").min(0).max(100_000_000);
+
+// ---------- Dashboard ----------
+
+adminRouter.get("/stats", async (_req, res) => {
+  const [orders, customers, products, lowStock, recent] = await Promise.all([
+    repositories.orders.stats(),
+    repositories.users.count("customer"),
+    repositories.products.count(),
+    repositories.products.listLowStock(LOW_STOCK_THRESHOLD, 10),
+    repositories.orders.list({ page: 1, limit: 5 }),
+  ]);
+  res.json({ data: { orders, customers, products, lowStock, recentOrders: recent.items } });
+});
+
+// ---------- Uploads ----------
+
+adminRouter.post("/uploads", imageUpload.single("image"), async (req, res) => {
+  const url = await finalizeUpload(req.file);
+  res.status(201).json({ data: { url } });
+});
+
+// ---------- Categories ----------
+
+const categorySchema = z.object({
+  name: z.string().trim().min(2).max(60),
+  slug: slug.optional(),
+  description: z.string().trim().max(500).default(""),
+  image: imagePath.nullable().default(null),
+  sortOrder: z.number().int().min(0).max(9999).default(0),
+  isActive: z.boolean().default(true),
+});
+
+adminRouter.get("/categories", async (_req, res) => {
+  const categories = await repositories.categories.findAll({ includeInactive: true });
+  const counts = await Promise.all(categories.map((c) => repositories.products.countByCategory(c.id)));
+  res.json({ data: categories.map((c, i) => ({ ...c, productCount: counts[i] })) });
+});
+
+adminRouter.post("/categories", async (req, res) => {
+  const data = categorySchema.parse(req.body);
+  const category = await repositories.categories.create({ ...data, slug: data.slug ?? slugify(data.name) });
+  res.status(201).json({ data: category });
+});
+
+adminRouter.patch("/categories/:id", async (req, res) => {
+  const data = categorySchema.partial().parse(req.body);
+  const category = await repositories.categories.update(req.params.id, data);
+  if (!category) throw new NotFoundError("Category not found");
+  res.json({ data: category });
+});
+
+adminRouter.delete("/categories/:id", async (req, res) => {
+  const inUse = await repositories.products.countByCategory(req.params.id);
+  if (inUse > 0) {
+    throw new HttpError(409, `This category has ${inUse} product(s). Move or delete them first, or hide the category.`);
+  }
+  if (!(await repositories.categories.delete(req.params.id))) throw new NotFoundError("Category not found");
+  res.status(204).end();
+});
+
+// ---------- Products ----------
+
+const productSchema = z.object({
+  name: z.string().trim().min(2).max(120),
+  slug: slug.optional(),
+  description: z.string().trim().max(5000).default(""),
+  categoryId: z.string().min(1),
+  brand: z.string().trim().max(80).default(""),
+  price: money,
+  compareAtPrice: money.nullable().default(null),
+  stock: z.number().int().min(0).max(1_000_000),
+  images: z.array(imagePath).max(10).default([]),
+  ageRestricted: z.boolean().default(true),
+  isFeatured: z.boolean().default(false),
+  isActive: z.boolean().default(true),
+});
+
+async function assertCategoryExists(categoryId: string | undefined) {
+  if (categoryId && !(await repositories.categories.findById(categoryId))) {
+    throw new HttpError(400, "Category does not exist");
+  }
+}
+
+const productListSchema = z.object({
+  ...pageSchema,
+  search: optionalText,
+  categoryId: optionalText,
+  status: z.enum(["active", "inactive", "all"]).default("all"),
+  sort: z.enum(["newest", "price_asc", "price_desc", "name_asc"]).default("newest"),
+});
+
+adminRouter.get("/products", async (req, res) => {
+  const query = productListSchema.parse(req.query);
+  const { items, ...meta } = await repositories.products.list(query);
+  res.json({ data: items, meta });
+});
+
+adminRouter.get("/products/:id", async (req, res) => {
+  const product = await repositories.products.findById(req.params.id);
+  if (!product) throw new NotFoundError("Product not found");
+  res.json({ data: product });
+});
+
+adminRouter.post("/products", async (req, res) => {
+  const data = productSchema.parse(req.body);
+  await assertCategoryExists(data.categoryId);
+  const product = await repositories.products.create({ ...data, slug: data.slug ?? slugify(data.name) });
+  res.status(201).json({ data: product });
+});
+
+adminRouter.patch("/products/:id", async (req, res) => {
+  // .partial() on the base shape so defaults don't overwrite fields that weren't sent.
+  const data = productSchema
+    .extend({
+      description: z.string().trim().max(5000),
+      brand: z.string().trim().max(80),
+      compareAtPrice: money.nullable(),
+      images: z.array(imagePath).max(10),
+      ageRestricted: z.boolean(),
+      isFeatured: z.boolean(),
+      isActive: z.boolean(),
+    })
+    .partial()
+    .parse(req.body);
+  await assertCategoryExists(data.categoryId);
+  const product = await repositories.products.update(req.params.id, data);
+  if (!product) throw new NotFoundError("Product not found");
+  res.json({ data: product });
+});
+
+adminRouter.delete("/products/:id", async (req, res) => {
+  // Past orders keep their own copy of product details, so deleting is safe for history.
+  if (!(await repositories.products.delete(req.params.id))) throw new NotFoundError("Product not found");
+  res.status(204).end();
+});
+
+// ---------- Orders ----------
+
+const orderListSchema = z.object({
+  ...pageSchema,
+  status: z.enum(ORDER_STATUSES).optional(),
+  search: optionalText,
+});
+
+adminRouter.get("/orders", async (req, res) => {
+  const query = orderListSchema.parse(req.query);
+  const { items, ...meta } = await repositories.orders.list(query);
+  res.json({ data: items, meta });
+});
+
+adminRouter.get("/orders/:id", async (req, res) => {
+  const order = await repositories.orders.findById(req.params.id);
+  if (!order) throw new NotFoundError("Order not found");
+  const customer = await repositories.users.findById(order.userId);
+  res.json({ data: { ...order, customer } });
+});
+
+adminRouter.patch("/orders/:id/status", async (req, res) => {
+  const { status } = z.object({ status: z.enum(ORDER_STATUSES) }).parse(req.body);
+  const order = await repositories.orders.findById(req.params.id);
+  if (!order) throw new NotFoundError("Order not found");
+  res.json({ data: await changeOrderStatus(order, status) });
+});
+
+// ---------- Customers ----------
+
+const customerListSchema = z.object({ ...pageSchema, search: optionalText });
+
+adminRouter.get("/customers", async (req, res) => {
+  const { search, page, limit } = customerListSchema.parse(req.query);
+  const { items, ...meta } = await repositories.users.list({ role: "customer", search, page, limit });
+  const orderCounts = await repositories.orders.countByUsers(items.map((u) => u.id));
+  res.json({ data: items.map((u) => ({ ...u, orderCount: orderCounts[u.id] ?? 0 })), meta });
+});

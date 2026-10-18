@@ -1,7 +1,8 @@
 import mongoose, { Schema, type InferSchemaType } from "mongoose";
 import { DuplicateError } from "../../domain/errors.js";
-import { ORDER_STATUSES, type Order } from "../../domain/order.js";
+import { ORDER_STATUSES, type Order, type OrderStatus } from "../../domain/order.js";
 import type { OrderRepository } from "../types.js";
+import { escapeRegex } from "./utils.js";
 
 const orderItemSchema = new Schema(
   {
@@ -89,8 +90,6 @@ function toOrder(doc: OrderDoc): Order {
   };
 }
 
-const escapeRegex = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-
 export const mongoOrderRepository: OrderRepository = {
   async create(data) {
     try {
@@ -126,5 +125,27 @@ export const mongoOrderRepository: OrderRepository = {
       returnDocument: "after",
     }).lean<OrderDoc>();
     return doc ? toOrder(doc) : null;
+  },
+  async stats() {
+    const rows = await OrderModel.aggregate<{ _id: OrderStatus; count: number; revenue: number }>([
+      { $group: { _id: "$status", count: { $sum: 1 }, revenue: { $sum: "$total" } } },
+    ]);
+    const byStatus = Object.fromEntries(ORDER_STATUSES.map((s) => [s, 0])) as Record<OrderStatus, number>;
+    let totalOrders = 0;
+    let revenue = 0;
+    for (const row of rows) {
+      byStatus[row._id] = row.count;
+      totalOrders += row.count;
+      if (row._id !== "cancelled") revenue += row.revenue;
+    }
+    return { totalOrders, revenue, byStatus };
+  },
+  async countByUsers(userIds) {
+    const ids = userIds.filter((id) => mongoose.isValidObjectId(id)).map((id) => new mongoose.Types.ObjectId(id));
+    const rows = await OrderModel.aggregate<{ _id: mongoose.Types.ObjectId; count: number }>([
+      { $match: { userId: { $in: ids } } },
+      { $group: { _id: "$userId", count: { $sum: 1 } } },
+    ]);
+    return Object.fromEntries(rows.map((r) => [r._id.toString(), r.count]));
   },
 };
