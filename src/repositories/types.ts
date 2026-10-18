@@ -1,6 +1,7 @@
 import type { Category, NewCategory } from "../domain/category.js";
 import type { Paginated } from "../domain/pagination.js";
 import type { NewProduct, Product } from "../domain/product.js";
+import type { NewUser, User, UserUpdate, UserWithPassword } from "../domain/user.js";
 
 export type ProductSort = "newest" | "price_asc" | "price_desc" | "name_asc";
 
@@ -26,7 +27,17 @@ export interface CategoryRepository {
   create(data: NewCategory): Promise<Category>;
 }
 
+export interface UserRepository {
+  findById(id: string): Promise<User | null>;
+  findByEmailWithPassword(email: string): Promise<UserWithPassword | null>;
+  /** Throws DuplicateError("email") if the email is taken. */
+  create(data: NewUser): Promise<User>;
+  update(id: string, data: UserUpdate): Promise<User | null>;
+  setPasswordHash(id: string, passwordHash: string): Promise<void>;
+}
+
 export interface Repositories {
   products: ProductRepository;
   categories: CategoryRepository;
+  users: UserRepository;
 }
