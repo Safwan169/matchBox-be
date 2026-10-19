@@ -6,9 +6,12 @@ import { HttpError, NotFoundError } from "../middleware/error-handler.js";
 import { reviewLimiter } from "../middleware/rate-limit.js";
 import { repositories } from "../repositories/index.js";
 import { canReview, refreshProductRating } from "../services/reviews.js";
+import { refreshStorefrontAfterWrites } from "../services/storefront.js";
 
 // Mounted at /api/products/:slug/reviews
 export const reviewsRouter = Router({ mergeParams: true });
+// Review changes update product star ratings shown on cached pages.
+reviewsRouter.use(refreshStorefrontAfterWrites);
 
 const reviewSchema = z.object({
   rating: z.number().int().min(1).max(5),

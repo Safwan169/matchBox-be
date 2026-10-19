@@ -8,12 +8,15 @@ import { repositories } from "../repositories/index.js";
 import { changeOrderStatus } from "../services/orders.js";
 import { getHomeSections } from "../services/home-sections.js";
 import { refreshProductRating } from "../services/reviews.js";
+import { refreshStorefrontAfterWrites } from "../services/storefront.js";
 import { finalizeUpload, imageUpload } from "../services/uploads.js";
 import { SLUG_PATTERN, slugify } from "../utils/slugify.js";
 import { optionalBdPhone } from "../utils/validation.js";
 
 export const adminRouter = Router();
 adminRouter.use(requireAdmin);
+// Any admin change can affect cached storefront pages.
+adminRouter.use(refreshStorefrontAfterWrites);
 
 const LOW_STOCK_THRESHOLD = 5;
 

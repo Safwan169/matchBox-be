@@ -72,6 +72,12 @@ authRouter.post("/logout", (_req, res) => {
   res.status(204).end();
 });
 
+// For the storefront's session check: always 200, with null when signed out (a 401 here
+// would be logged as a browser console error on every page for every visitor).
+authRouter.get("/session", (req, res) => {
+  res.json({ data: req.user ?? null });
+});
+
 authRouter.get("/me", requireAuth, (req, res) => {
   res.json({ data: req.user });
 });
