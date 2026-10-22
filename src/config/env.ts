@@ -18,6 +18,13 @@ const envSchema = z.object({
   STOREFRONT_URL: z.string().url().optional(),
   // Shared secret the storefront server sends so its requests skip per-IP rate limits.
   INTERNAL_API_KEY: z.string().min(32, "INTERNAL_API_KEY must be at least 32 characters").optional(),
+  // Image storage: Cloudinary when set (from the Cloudinary dashboard, "API environment
+  // variable"), otherwise files are saved to backend/uploads (development only).
+  CLOUDINARY_URL: z
+    .string()
+    .regex(/^cloudinary:\/\/[^:]+:[^@]+@[\w-]+$/, "CLOUDINARY_URL must look like cloudinary://<key>:<secret>@<cloud name>")
+    .optional(),
+  CLOUDINARY_FOLDER: z.string().regex(/^[\w-]+(\/[\w-]+)*$/).default("matchbox"),
   DB_CLIENT: z.enum(["mongo", "postgres"]).default("mongo"),
   MONGO_URI: z.string().optional(),
   DATABASE_URL: z.string().optional(),
