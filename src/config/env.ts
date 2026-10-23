@@ -25,9 +25,17 @@ const envSchema = z.object({
     .regex(/^cloudinary:\/\/[^:]+:[^@]+@[\w-]+$/, "CLOUDINARY_URL must look like cloudinary://<key>:<secret>@<cloud name>")
     .optional(),
   CLOUDINARY_FOLDER: z.string().regex(/^[\w-]+(\/[\w-]+)*$/).default("matchbox"),
+  // First admin account, created at startup if that email doesn't exist yet. Never overwrites
+  // an existing account, so a password changed later in the dashboard is kept.
+  ADMIN_EMAIL: z.string().trim().toLowerCase().email().optional(),
+  ADMIN_PASSWORD: z.string().min(8, "ADMIN_PASSWORD must be at least 8 characters").optional(),
+  ADMIN_NAME: z.string().trim().min(2).default("Admin"),
   DB_CLIENT: z.enum(["mongo", "postgres"]).default("mongo"),
   MONGO_URI: z.string().optional(),
   DATABASE_URL: z.string().optional(),
+}).refine((e) => !e.ADMIN_EMAIL === !e.ADMIN_PASSWORD, {
+  message: "Set both ADMIN_EMAIL and ADMIN_PASSWORD, or neither",
+  path: ["ADMIN_PASSWORD"],
 });
 
 export const env = envSchema.parse(process.env);

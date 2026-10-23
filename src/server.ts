@@ -1,6 +1,7 @@
 import { createApp } from "./app.js";
 import { env } from "./config/env.js";
 import { connectDatabase, disconnectDatabase } from "./db/index.js";
+import { ensureAdminFromEnv } from "./services/admin-bootstrap.js";
 import { storage } from "./services/uploads.js";
 
 async function main() {
@@ -9,6 +10,7 @@ async function main() {
   } catch (err) {
     console.error("[db] Connection failed:", (err as Error).message);
   }
+  await ensureAdminFromEnv().catch((err) => console.error("[admin] Could not create the .env admin:", (err as Error).message));
 
   const app = createApp();
   const server = app.listen(env.PORT, () => {
