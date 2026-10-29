@@ -27,7 +27,7 @@ const pageSchema = {
 const optionalText = z.string().trim().min(1).max(100).optional();
 const slug = z.string().trim().toLowerCase().regex(SLUG_PATTERN, "Use lowercase letters, numbers and dashes");
 // Images are our own uploads or absolute https URLs.
-const imagePath = z.string().trim().regex(/^(\/uploads\/[\w.-]+|https:\/\/\S+)$/, "Invalid image URL");
+const imagePath = z.string().trim().regex(/^(\/(?:uploads|images)\/[\w.-]+|https:\/\/\S+)$/, "Invalid image URL");
 const money = z.number().int("Amount must be in poisha (whole number)").min(0).max(100_000_000);
 
 // ---------- Dashboard ----------
@@ -203,12 +203,17 @@ const promotionLink = z.union([
 const optionalDate = z.iso.datetime({ offset: true }).transform((d) => new Date(d)).nullable();
 
 const promotionFields = {
+  eyebrow: z.string().trim().max(80),
   title: z.string().trim().min(2).max(100),
+  accent: z.string().trim().max(40),
   subtitle: z.string().trim().max(200),
   image: imagePath,
   buttonText: z.string().trim().max(40),
   link: promotionLink,
   showText: z.boolean(),
+  textColor: z.enum(["ivory", "brass", "ink"]),
+  eyebrowColor: z.enum(["ivory", "brass", "ink"]),
+  accentColor: z.enum(["ivory", "brass", "ink"]),
   sortOrder: z.number().int().min(0).max(9999),
   isActive: z.boolean(),
   startsAt: optionalDate,
@@ -222,10 +227,15 @@ const DATES_MESSAGE = "End date must be after the start date";
 const createPromotionSchema = z
   .object({
     ...promotionFields,
+    eyebrow: promotionFields.eyebrow.default(""),
+    accent: promotionFields.accent.default(""),
     subtitle: promotionFields.subtitle.default(""),
     buttonText: promotionFields.buttonText.default(""),
     link: promotionLink.default(""),
     showText: promotionFields.showText.default(true),
+    textColor: promotionFields.textColor.default("ivory"),
+    eyebrowColor: promotionFields.eyebrowColor.default("brass"),
+    accentColor: promotionFields.accentColor.default("brass"),
     sortOrder: promotionFields.sortOrder.default(0),
     isActive: promotionFields.isActive.default(true),
     startsAt: optionalDate.default(null),
@@ -253,6 +263,9 @@ adminRouter.patch("/promotions/:id", async (req, res) => {
 });
 
 adminRouter.delete("/promotions/:id", async (req, res) => {
+  const promotion = await repositories.promotions.findById(req.params.id);
+  if (!promotion) throw new NotFoundError("Promotion not found");
+  if (promotion.kind === "brand") throw new HttpError(400, "The brand hero cannot be deleted. Hide it instead.");
   if (!(await repositories.promotions.delete(req.params.id))) throw new NotFoundError("Promotion not found");
   res.status(204).end();
 });

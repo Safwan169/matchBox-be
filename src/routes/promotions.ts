@@ -7,14 +7,20 @@ export const promotionsRouter = Router();
 promotionsRouter.get("/", async (_req, res) => {
   const promotions = await repositories.promotions.listLive(new Date());
   res.json({
-    data: promotions.map(({ id, title, subtitle, image, buttonText, link, showText }) => ({
+    data: promotions.map(({ id, kind, eyebrow, title, accent, subtitle, image, buttonText, link, showText, textColor, eyebrowColor, accentColor }) => ({
       id,
+      kind,
+      eyebrow,
       title,
+      accent,
       subtitle,
       image,
       buttonText,
       link,
       showText,
+      textColor,
+      eyebrowColor,
+      accentColor,
     })),
   });
 });

@@ -76,7 +76,7 @@ All responses have the shape `{ data }` or `{ data, meta }`. Errors have the sha
 - `GET /api/products/:slug`
 
 - `GET /api/settings` — store contact details: phone, WhatsApp, email, address, Facebook link
-- `GET /api/promotions` — home page banners that are currently live
+- `GET /api/promotions` — the live brand hero followed by currently live promotions
 
 **Auth** (session stored in an httpOnly cookie named `mb_session`; these endpoints are rate-limited)
 - `POST /api/auth/register` — requires `phone` (a Bangladeshi mobile number) and `dateOfBirth`;
@@ -99,8 +99,8 @@ Phone numbers are accepted as `01XXXXXXXXX`, `+8801…` or `8801…`, and stored
 - `GET|POST /api/admin/products`, `GET|PATCH|DELETE /api/admin/products/:id`
 - `GET /api/admin/orders`, `GET /api/admin/orders/:id`, `PATCH /api/admin/orders/:id/status`
 - `GET /api/admin/customers`
-- `GET|POST /api/admin/promotions`, `PATCH|DELETE /api/admin/promotions/:id` — hero banners with
-  optional start and end dates
+- `GET|POST /api/admin/promotions`, `PATCH|DELETE /api/admin/promotions/:id` — editable brand
+  hero and scheduled banners; the brand hero cannot be deleted
 - `GET|PATCH /api/admin/settings` — store contact details
 - `POST /api/admin/uploads` — multipart field `image`, JPEG/PNG/WebP/GIF up to 5 MB. Files
   are served from `/uploads/…`.
