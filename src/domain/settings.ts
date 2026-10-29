@@ -5,6 +5,8 @@ export interface StoreSettings {
   email: string;
   address: string;
   facebookUrl: string;
+  instagramUrl: string;
+  tiktokUrl: string;
   updatedAt: Date | null;
 }
 
@@ -16,5 +18,7 @@ export const DEFAULT_SETTINGS: StoreSettings = {
   email: "",
   address: "",
   facebookUrl: "",
+  instagramUrl: "",
+  tiktokUrl: "",
   updatedAt: null,
 };

@@ -11,6 +11,8 @@ const settingsSchema = new Schema(
     email: { type: String, default: "" },
     address: { type: String, default: "" },
     facebookUrl: { type: String, default: "" },
+    instagramUrl: { type: String, default: "" },
+    tiktokUrl: { type: String, default: "" },
   },
   { timestamps: true },
 );
@@ -28,6 +30,8 @@ function toSettings(doc: SettingsDoc | null): StoreSettings {
     email: doc.email,
     address: doc.address,
     facebookUrl: doc.facebookUrl,
+    instagramUrl: doc.instagramUrl ?? "",
+    tiktokUrl: doc.tiktokUrl ?? "",
     updatedAt: doc.updatedAt,
   };
 }

@@ -291,6 +291,8 @@ adminRouter.delete("/reviews/:id", async (req, res) => {
 const sectionLimit = z.number().int().min(1).max(24).default(8);
 const sectionTitle = z.string().trim().max(80).default("");
 const sectionBase = { title: sectionTitle, isActive: z.boolean().default(true) };
+// Optional photo; "" uses the built-in photo for that section.
+const optionalImage = z.union([z.literal(""), imagePath]).default("");
 
 // Each section type has its own config shape.
 const sectionSchema = z.discriminatedUnion("type", [
@@ -313,6 +315,27 @@ const sectionSchema = z.discriminatedUnion("type", [
     ...sectionBase,
     type: z.literal("text"),
     config: z.object({ body: z.string().trim().min(1, "Write some text").max(2000) }),
+  }),
+  z.object({
+    ...sectionBase,
+    type: z.literal("editorial"),
+    config: z.object({
+      image: optionalImage,
+      body: z.string().trim().max(1000).default(""),
+      link: promotionLink.default(""),
+      linkText: z.string().trim().max(40).default(""),
+    }),
+  }),
+  z.object({ ...sectionBase, type: z.literal("services"), config: z.object({}).strip().default({}) }),
+  z.object({
+    ...sectionBase,
+    type: z.literal("quote"),
+    config: z.object({ body: z.string().trim().min(1, "Write the quote").max(300), image: optionalImage }),
+  }),
+  z.object({
+    ...sectionBase,
+    type: z.literal("contact"),
+    config: z.object({ body: z.string().trim().max(500).default("") }).default({ body: "" }),
   }),
 ]);
 
@@ -374,6 +397,14 @@ const settingsSchema = z
     facebookUrl: z.union([
       z.literal(""),
       z.string().trim().max(300).regex(/^https:\/\/(www\.|m\.)?(facebook|fb)\.com\/\S+$/, "Use a https://facebook.com/… link"),
+    ]),
+    instagramUrl: z.union([
+      z.literal(""),
+      z.string().trim().max(300).regex(/^https:\/\/(www\.)?instagram\.com\/\S+$/, "Use a https://instagram.com/… link"),
+    ]),
+    tiktokUrl: z.union([
+      z.literal(""),
+      z.string().trim().max(300).regex(/^https:\/\/(www\.)?tiktok\.com\/\S+$/, "Use a https://tiktok.com/… link"),
     ]),
   })
   .partial();

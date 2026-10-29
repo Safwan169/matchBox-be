@@ -13,6 +13,7 @@ const homeSectionSchema = new Schema(
       categoryId: String,
       image: String,
       link: String,
+      linkText: String,
       body: String,
     },
   },
@@ -31,7 +32,7 @@ function toSection(doc: HomeSectionDoc): HomeSection {
   const c = doc.config ?? {};
   // Drop unset keys so the config only carries what the section uses.
   const config = Object.fromEntries(
-    Object.entries({ limit: c.limit, categoryId: c.categoryId, image: c.image, link: c.link, body: c.body }).filter(
+    Object.entries({ limit: c.limit, categoryId: c.categoryId, image: c.image, link: c.link, linkText: c.linkText, body: c.body }).filter(
       ([, v]) => v !== undefined && v !== null,
     ),
   );
