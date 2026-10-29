@@ -37,7 +37,7 @@ export const errorHandler: ErrorRequestHandler = (err, _req, res, _next) => {
     return;
   }
   if (err instanceof MulterError) {
-    const message = err.code === "LIMIT_FILE_SIZE" ? "Image must be 5 MB or smaller" : err.message;
+    const message = err.code === "LIMIT_FILE_SIZE" ? "Image must be 4 MB or smaller" : err.message;
     res.status(400).json({ error: message });
     return;
   }

@@ -19,6 +19,23 @@ export function isTrustedServer(req: Request) {
   return a.length === b.length && timingSafeEqual(a, b);
 }
 
+/**
+ * Browser requests reach us through the storefront's /backend proxy, so `req.ip` is the
+ * storefront server. The proxy passes the visitor's IP in `x-client-ip`, signed with
+ * `x-proxy-key`; it is trusted only with the right key (otherwise anyone could pick an IP).
+ */
+export function clientIp(req: Request) {
+  const forwarded = req.get("x-client-ip");
+  const key = req.get("x-proxy-key");
+  const expected = env.INTERNAL_API_KEY;
+  if (forwarded && key && expected) {
+    const a = Buffer.from(key);
+    const b = Buffer.from(expected);
+    if (a.length === b.length && timingSafeEqual(a, b)) return forwarded;
+  }
+  return req.ip ?? "";
+}
+
 interface LimiterOptions {
   windowMs: number;
   limit: number;
@@ -36,7 +53,7 @@ function createLimiter({ windowMs, limit, message, perUser = false }: LimiterOpt
     message: { error: message },
     skip: isTrustedServer,
     // ipKeyGenerator groups IPv6 addresses by subnet so one user can't rotate addresses.
-    keyGenerator: (req) => (perUser && req.user ? `user:${req.user.id}` : `ip:${ipKeyGenerator(req.ip ?? "")}`),
+    keyGenerator: (req) => (perUser && req.user ? `user:${req.user.id}` : `ip:${ipKeyGenerator(clientIp(req))}`),
   });
 }
 

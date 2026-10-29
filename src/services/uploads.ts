@@ -11,7 +11,7 @@ export const UPLOAD_DIR = path.resolve(process.cwd(), "uploads");
 export const UPLOAD_URL_PREFIX = "/uploads";
 mkdirSync(UPLOAD_DIR, { recursive: true });
 
-const MAX_BYTES = 5 * 1024 * 1024;
+const MAX_BYTES = 4 * 1024 * 1024; // under Vercel's ~4.5 MB request limit (uploads pass through the shop's proxy)
 // Originals larger than this are scaled down by Cloudinary before storing.
 const MAX_DIMENSION = 2400;
 
@@ -30,7 +30,7 @@ const extensions: Record<string, string> = {
   "image/gif": ".gif",
 };
 
-// Kept in memory (max 5 MB) so it can be checked before it's stored anywhere.
+// Kept in memory (max 4 MB) so it can be checked before it's stored anywhere.
 export const imageUpload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: MAX_BYTES, files: 1 },
