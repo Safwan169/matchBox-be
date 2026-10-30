@@ -41,6 +41,9 @@ async function priceCart(lines: CartLine[]): Promise<PricedCart> {
     if (!product || !product.isActive) {
       throw new HttpError(409, "A product in your cart is no longer available");
     }
+    if (product.maxPerOrder !== null && quantity > product.maxPerOrder) {
+      throw new HttpError(409, `You can buy at most ${product.maxPerOrder} of ${product.name} per order`);
+    }
     if (product.stock < quantity) {
       throw new HttpError(
         409,

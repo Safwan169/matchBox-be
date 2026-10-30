@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { z } from "zod";
+import { shopConfig } from "../config/shop.js";
 import { ORDER_STATUSES } from "../domain/order.js";
 import { requireAdmin } from "../middleware/auth.js";
 import { uploadLimiter } from "../middleware/rate-limit.js";
@@ -100,6 +101,7 @@ const productSchema = z.object({
   price: money,
   compareAtPrice: money.nullable().default(null),
   stock: z.number().int().min(0).max(1_000_000),
+  maxPerOrder: z.number().int().min(1).max(shopConfig.maxQuantityPerItem).nullable().default(null),
   images: z.array(imagePath).max(10).default([]),
   ageRestricted: z.boolean().default(true),
   isFeatured: z.boolean().default(false),
@@ -146,6 +148,7 @@ adminRouter.patch("/products/:id", async (req, res) => {
       description: z.string().trim().max(5000),
       brand: z.string().trim().max(80),
       compareAtPrice: money.nullable(),
+      maxPerOrder: z.number().int().min(1).max(shopConfig.maxQuantityPerItem).nullable(),
       images: z.array(imagePath).max(10),
       ageRestricted: z.boolean(),
       isFeatured: z.boolean(),

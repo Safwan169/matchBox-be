@@ -13,7 +13,7 @@ const categories: NewCategory[] = [
 
 type SeedProduct = Omit<NewProduct, "categoryId"> & { category: string };
 
-const base = { images: [], ageRestricted: true, isActive: true, compareAtPrice: null };
+const base = { images: [], ageRestricted: true, isActive: true, compareAtPrice: null, maxPerOrder: null };
 
 const products: SeedProduct[] = [
   { ...base, category: "cigarettes", name: "Classic Red — Pack of 20", slug: "classic-red-20", brand: "Sample", description: "Full-flavour classic, pack of 20.", price: 36000, stock: 120, isFeatured: true },
