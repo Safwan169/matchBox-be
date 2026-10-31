@@ -7,7 +7,7 @@ export interface Product {
   description: string;
   categoryId: string;
   brand: string;
-  price: number; // smallest currency unit (BDT poisha: 35000 = ৳350)
+  price: number | null; // smallest currency unit (BDT poisha: 35000 = ৳350); null = "price on request", can't be ordered
   compareAtPrice: number | null; // original price when on sale
   stock: number;
   maxPerOrder: number | null; // most one order may contain; null = only the store-wide limit

@@ -98,7 +98,7 @@ const productSchema = z.object({
   description: z.string().trim().max(5000).default(""),
   categoryId: z.string().min(1),
   brand: z.string().trim().max(80).default(""),
-  price: money,
+  price: money.nullable().default(null),
   compareAtPrice: money.nullable().default(null),
   stock: z.number().int().min(0).max(1_000_000),
   maxPerOrder: z.number().int().min(1).max(shopConfig.maxQuantityPerItem).nullable().default(null),
@@ -147,6 +147,7 @@ adminRouter.patch("/products/:id", async (req, res) => {
     .extend({
       description: z.string().trim().max(5000),
       brand: z.string().trim().max(80),
+      price: money.nullable(),
       compareAtPrice: money.nullable(),
       maxPerOrder: z.number().int().min(1).max(shopConfig.maxQuantityPerItem).nullable(),
       images: z.array(imagePath).max(10),

@@ -31,16 +31,14 @@ const extensions: Record<string, string> = {
 };
 
 // Kept in memory (max 4 MB) so it can be checked before it's stored anywhere.
+// No MIME-type filter here: browsers on some Windows PCs send WebP as "" or
+// application/octet-stream, so the real type is taken from the file's bytes instead.
 export const imageUpload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: MAX_BYTES, files: 1 },
-  fileFilter: (_req, file, cb) => {
-    if (extensions[file.mimetype]) cb(null, true);
-    else cb(new HttpError(400, "Only JPEG, PNG, WebP or GIF images are allowed"));
-  },
 });
 
-// The declared MIME type comes from the client, so confirm the file's magic bytes too.
+// The declared MIME type comes from the client and can be wrong, so the magic bytes decide.
 function sniffImageType(buffer: Buffer): string | null {
   if (buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff) return "image/jpeg";
   if (buffer.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) return "image/png";
@@ -69,7 +67,8 @@ function uploadToCloudinary(buffer: Buffer): Promise<UploadApiResponse> {
 /** Verifies an uploaded image, stores it, and returns its public URL (Cloudinary) or path (local). */
 export async function finalizeUpload(file: Express.Multer.File | undefined): Promise<string> {
   if (!file) throw new HttpError(400, "No image file was uploaded (field name: image)");
-  if (sniffImageType(file.buffer) !== file.mimetype) throw new HttpError(400, "The file is not a valid image");
+  const type = sniffImageType(file.buffer);
+  if (!type) throw new HttpError(400, "Only JPEG, PNG, WebP or GIF images are allowed");
 
   if (storage === "cloudinary") {
     try {
@@ -81,7 +80,7 @@ export async function finalizeUpload(file: Express.Multer.File | undefined): Pro
     }
   }
 
-  const filename = `${randomUUID()}${extensions[file.mimetype]}`;
+  const filename = `${randomUUID()}${extensions[type]}`;
   await writeFile(path.join(UPLOAD_DIR, filename), file.buffer);
   return `${UPLOAD_URL_PREFIX}/${filename}`;
 }

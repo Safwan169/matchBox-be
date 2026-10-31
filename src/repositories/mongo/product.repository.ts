@@ -10,7 +10,7 @@ const productSchema = new Schema(
     description: { type: String, default: "" },
     categoryId: { type: Schema.Types.ObjectId, ref: "Category", required: true, index: true },
     brand: { type: String, default: "" },
-    price: { type: Number, required: true, min: 0 },
+    price: { type: Number, default: null, min: 0 },
     compareAtPrice: { type: Number, default: null, min: 0 },
     stock: { type: Number, default: 0, min: 0 },
     maxPerOrder: { type: Number, default: null, min: 1 },
@@ -47,7 +47,7 @@ function toProduct(doc: ProductDoc): Product {
     description: doc.description,
     categoryId: doc.categoryId.toString(),
     brand: doc.brand,
-    price: doc.price,
+    price: doc.price ?? null,
     compareAtPrice: doc.compareAtPrice ?? null,
     stock: doc.stock,
     maxPerOrder: doc.maxPerOrder ?? null,
@@ -74,7 +74,11 @@ export const mongoProductRepository: ProductRepository = {
       filter.categoryId = categoryId;
     }
     if (featured !== undefined) filter.isFeatured = featured;
-    if (onSale) filter.$expr = { $gt: ["$compareAtPrice", "$price"] };
+    // In BSON order any number is greater than null, so unpriced products need excluding explicitly.
+    if (onSale) {
+      filter.price = { $ne: null };
+      filter.$expr = { $gt: ["$compareAtPrice", "$price"] };
+    }
     if (excludeIds?.length) filter._id = { $nin: excludeIds.filter((id) => mongoose.isValidObjectId(id)) };
     if (search) {
       const pattern = new RegExp(escapeRegex(search), "i");
