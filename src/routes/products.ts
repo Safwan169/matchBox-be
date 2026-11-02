@@ -37,27 +37,37 @@ productsRouter.get("/", async (req, res) => {
   res.json({ data: items, meta });
 });
 
-// "You may also like": same category first, then featured/newest products to fill up.
+// Prefer products from the same brand and category. Broaden to the category, then the rest of the shop.
 productsRouter.get("/:slug/related", async (req, res) => {
   const { limit } = z.object({ limit: z.coerce.number().int().min(1).max(12).default(4) }).parse(req.query);
   const product = await repositories.products.findBySlug(req.params.slug);
   if (!product) throw new NotFoundError("Product not found");
 
-  const sameCategory = await repositories.products.list({
+  const categoryProducts = await repositories.products.list({
     categoryId: product.categoryId,
     excludeIds: [product.id],
-    sort: "newest",
+    sort: "position",
     page: 1,
-    limit,
+    limit: 100,
   });
-  const related = [...sameCategory.items];
+  const brandKey = (product.brand.trim() || product.name.trim().split(/\s+/)[0]).toLowerCase();
+  const sameBrand = categoryProducts.items.filter((candidate) => {
+    const candidateBrand = candidate.brand.trim().toLowerCase();
+    return (candidateBrand && candidateBrand === brandKey) || candidate.name.toLowerCase().includes(brandKey);
+  });
+  const related = [...sameBrand.slice(0, limit)];
+
+  for (const candidate of categoryProducts.items) {
+    if (related.length >= limit) break;
+    if (!related.some((item) => item.id === candidate.id)) related.push(candidate);
+  }
 
   for (const featured of [true, undefined]) {
     if (related.length >= limit) break;
     const more = await repositories.products.list({
       featured,
       excludeIds: [product.id, ...related.map((p) => p.id)],
-      sort: "newest",
+      sort: "position",
       page: 1,
       limit: limit - related.length,
     });
