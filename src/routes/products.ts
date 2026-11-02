@@ -17,7 +17,7 @@ const listQuerySchema = z.object({
     .enum(["true", "false"])
     .transform((v) => v === "true")
     .optional(),
-  sort: z.enum(["newest", "price_asc", "price_desc", "name_asc"]).default("newest"),
+  sort: z.enum(["position", "newest", "price_asc", "price_desc", "name_asc"]).default("position"),
   page: z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(100).default(20),
 });

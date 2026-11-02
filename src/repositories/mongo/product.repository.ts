@@ -18,6 +18,7 @@ const productSchema = new Schema(
     ageRestricted: { type: Boolean, default: true },
     isFeatured: { type: Boolean, default: false, index: true },
     isActive: { type: Boolean, default: true },
+    sortOrder: { type: Number, default: 0, index: true },
     ratingAverage: { type: Number, default: 0 },
     ratingCount: { type: Number, default: 0 },
   },
@@ -33,6 +34,7 @@ type ProductDoc = InferSchemaType<typeof productSchema> & {
 const ProductModel = mongoose.model("Product", productSchema);
 
 const sortMap: Record<ProductSort, Record<string, SortOrder>> = {
+  position: { sortOrder: 1, createdAt: -1 },
   newest: { createdAt: -1 },
   price_asc: { price: 1 },
   price_desc: { price: -1 },
@@ -55,6 +57,7 @@ function toProduct(doc: ProductDoc): Product {
     ageRestricted: doc.ageRestricted,
     isFeatured: doc.isFeatured,
     isActive: doc.isActive,
+    sortOrder: doc.sortOrder ?? 0,
     ratingAverage: doc.ratingAverage ?? 0,
     ratingCount: doc.ratingCount ?? 0,
     createdAt: doc.createdAt,
@@ -102,6 +105,17 @@ export const mongoProductRepository: ProductRepository = {
       totalPages: Math.ceil(total / limit),
     };
   },
+  async listForReorder() {
+    const docs = await ProductModel.find().sort({ sortOrder: 1, createdAt: -1 }).lean<ProductDoc[]>();
+    return docs.map(toProduct);
+  },
+  async reorder(ids) {
+    const valid = ids.filter((id) => mongoose.isValidObjectId(id));
+    const products = await ProductModel.find().select({ _id: 1 }).sort({ sortOrder: 1, createdAt: -1 }).lean<Array<{ _id: mongoose.Types.ObjectId }>>();
+    const existing = products.map((p) => p._id.toString());
+    const ordered = [...valid.filter((id) => existing.includes(id)), ...existing.filter((id) => !valid.includes(id))];
+    if (ordered.length) await ProductModel.bulkWrite(ordered.map((id, index) => ({ updateOne: { filter: { _id: id }, update: { $set: { sortOrder: index } } } })));
+  },
   async findBySlug(slug) {
     const doc = await ProductModel.findOne({ slug, isActive: true }).lean<ProductDoc>();
     return doc ? toProduct(doc) : null;
@@ -118,7 +132,8 @@ export const mongoProductRepository: ProductRepository = {
   },
   async create(data) {
     try {
-      const doc = await ProductModel.create(data);
+      const sortOrder = data.sortOrder ?? ((await ProductModel.countDocuments()) ? (await ProductModel.findOne().sort({ sortOrder: -1 }).select({ sortOrder: 1 }).lean<{ sortOrder?: number }>())?.sortOrder ?? -1 : -1) + 1;
+      const doc = await ProductModel.create({ ...data, sortOrder });
       return toProduct(doc.toObject() as ProductDoc);
     } catch (err) {
       rethrowDuplicate(err, "slug");

@@ -68,8 +68,10 @@ async function priceCart(lines: CartLine[]): Promise<PricedCart> {
 }
 
 export async function quoteOrder(lines: CartLine[], city: string) {
+  assertDeliveryCity(city);
   const { items, subtotal } = await priceCart(lines);
-  const shippingFee = deliveryFee(subtotal, city);
+  const settings = await repositories.settings.get();
+  const shippingFee = deliveryFee(items.reduce((sum, item) => sum + item.quantity, 0), settings.deliveryTiers);
   return { items, subtotal, shippingFee, total: subtotal + shippingFee };
 }
 
@@ -91,7 +93,10 @@ export async function placeOrder(input: {
   shippingAddress: ShippingAddress;
   notes: string;
 }): Promise<Order> {
+  assertDeliveryCity(input.shippingAddress.city);
   const { items, subtotal } = await priceCart(input.lines);
+  const settings = await repositories.settings.get();
+  const shippingFee = deliveryFee(items.reduce((sum, item) => sum + item.quantity, 0), settings.deliveryTiers);
 
   // Reserve stock item by item; undo what was taken if any item runs out meanwhile.
   const reserved: OrderItem[] = [];
@@ -104,7 +109,6 @@ export async function placeOrder(input: {
     reserved.push(item);
   }
 
-  const shippingFee = deliveryFee(subtotal, input.shippingAddress.city);
   try {
     for (let attempt = 0; ; attempt++) {
       try {
@@ -129,6 +133,12 @@ export async function placeOrder(input: {
   } catch (err) {
     await releaseStock(reserved);
     throw err;
+  }
+}
+
+function assertDeliveryCity(city: string) {
+  if (city.trim().toLowerCase() !== "dhaka") {
+    throw new HttpError(400, "We currently deliver within Dhaka only. Please enter Dhaka as your city.");
   }
 }
 

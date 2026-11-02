@@ -1,12 +1,10 @@
-// Store rules. Amounts are in poisha (1/100 BDT).
+// Store-wide product quantity limit. Delivery fees are configured in StoreSettings (poisha).
 export const shopConfig = {
   deliveryFeeInsideDhaka: 6000, // ৳60
-  deliveryFeeOutsideDhaka: 12000, // ৳120
-  freeDeliveryThreshold: 300000, // free delivery on subtotals of ৳3,000+
   maxQuantityPerItem: 50,
 };
 
-export function deliveryFee(subtotal: number, city: string) {
-  if (subtotal >= shopConfig.freeDeliveryThreshold) return 0;
-  return city.trim().toLowerCase() === "dhaka" ? shopConfig.deliveryFeeInsideDhaka : shopConfig.deliveryFeeOutsideDhaka;
+export function deliveryFee(itemCount: number, tiers: { minItems: number; insideDhakaFee: number }[]) {
+  const active = [...tiers].sort((a, b) => a.minItems - b.minItems).filter((tier) => tier.minItems <= itemCount).at(-1);
+  return active?.insideDhakaFee ?? shopConfig.deliveryFeeInsideDhaka;
 }

@@ -8,7 +8,7 @@ import type { NewPromotion, Promotion } from "../domain/promotion.js";
 import type { RatingSummary, Review, ReviewStatus } from "../domain/review.js";
 import type { NewUser, User, UserRole, UserUpdate, UserWithPassword } from "../domain/user.js";
 
-export type ProductSort = "newest" | "price_asc" | "price_desc" | "name_asc";
+export type ProductSort = "position" | "newest" | "price_asc" | "price_desc" | "name_asc";
 
 export interface ProductQuery {
   categoryId?: string;
@@ -28,6 +28,8 @@ export interface ProductQuery {
 // Every database implementation must satisfy these interfaces.
 export interface ProductRepository {
   list(query: ProductQuery): Promise<Paginated<Product>>;
+  listForReorder(): Promise<Product[]>;
+  reorder(ids: string[]): Promise<void>;
   /** Active products only. */
   findBySlug(slug: string): Promise<Product | null>;
   /** Any product, active or not. */

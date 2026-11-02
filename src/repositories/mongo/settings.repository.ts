@@ -13,6 +13,11 @@ const settingsSchema = new Schema(
     facebookUrl: { type: String, default: "" },
     instagramUrl: { type: String, default: "" },
     tiktokUrl: { type: String, default: "" },
+    deliveryTiers: { type: [new Schema({
+      minItems: { type: Number, required: true, min: 1 },
+      insideDhakaFee: { type: Number, required: true, min: 0 },
+      message: { type: String, default: "" },
+    }, { _id: false })], default: undefined },
   },
   { timestamps: true },
 );
@@ -32,6 +37,9 @@ function toSettings(doc: SettingsDoc | null): StoreSettings {
     facebookUrl: doc.facebookUrl,
     instagramUrl: doc.instagramUrl ?? "",
     tiktokUrl: doc.tiktokUrl ?? "",
+    deliveryTiers: doc.deliveryTiers?.length
+      ? doc.deliveryTiers.map((tier) => ({ minItems: tier.minItems, insideDhakaFee: tier.insideDhakaFee, message: tier.message ?? "" }))
+      : DEFAULT_SETTINGS.deliveryTiers,
     updatedAt: doc.updatedAt,
   };
 }

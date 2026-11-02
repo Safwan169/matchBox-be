@@ -106,6 +106,7 @@ const productSchema = z.object({
   ageRestricted: z.boolean().default(true),
   isFeatured: z.boolean().default(false),
   isActive: z.boolean().default(true),
+  sortOrder: z.number().int().min(0).max(1_000_000).optional(),
 });
 
 async function assertCategoryExists(categoryId: string | undefined) {
@@ -119,7 +120,18 @@ const productListSchema = z.object({
   search: optionalText,
   categoryId: optionalText,
   status: z.enum(["active", "inactive", "all"]).default("all"),
-  sort: z.enum(["newest", "price_asc", "price_desc", "name_asc"]).default("newest"),
+  sort: z.enum(["position", "newest", "price_asc", "price_desc", "name_asc"]).default("position"),
+});
+
+adminRouter.get("/products/order", async (_req, res) => {
+  res.json({ data: await repositories.products.listForReorder() });
+});
+
+adminRouter.patch("/products/order", async (req, res) => {
+  const { ids } = z.object({ ids: z.array(z.string().min(1)).max(10000) }).parse(req.body);
+  if (new Set(ids).size !== ids.length) throw new HttpError(400, "Product order contains duplicates");
+  await repositories.products.reorder(ids);
+  res.json({ data: await repositories.products.listForReorder() });
 });
 
 adminRouter.get("/products", async (req, res) => {
@@ -423,6 +435,13 @@ const settingsSchema = z
       z.literal(""),
       z.string().trim().max(300).regex(/^https:\/\/(www\.)?tiktok\.com\/\S+$/, "Use a https://tiktok.com/… link"),
     ]),
+    deliveryTiers: z.array(z.object({
+      minItems: z.number().int().min(1).max(1000),
+      insideDhakaFee: money,
+      message: z.string().trim().max(180),
+    })).min(1).max(20)
+      .refine((tiers) => new Set(tiers.map((tier) => tier.minItems)).size === tiers.length, "Each item quantity must be unique")
+      .refine((tiers) => tiers.some((tier) => tier.minItems === 1), "Add a delivery tier starting at 1 item"),
   })
   .partial();
 

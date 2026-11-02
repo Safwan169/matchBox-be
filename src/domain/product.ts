@@ -15,10 +15,11 @@ export interface Product {
   ageRestricted: boolean;
   isFeatured: boolean;
   isActive: boolean;
+  sortOrder: number;
   ratingAverage: number; // 0–5, from published reviews (kept in sync by the review service)
   ratingCount: number;
   createdAt: Date;
   updatedAt: Date;
 }
 
-export type NewProduct = Omit<Product, "id" | "createdAt" | "updatedAt" | "ratingAverage" | "ratingCount">;
+export type NewProduct = Omit<Product, "id" | "createdAt" | "updatedAt" | "ratingAverage" | "ratingCount" | "sortOrder"> & { sortOrder?: number };
