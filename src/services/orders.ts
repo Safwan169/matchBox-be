@@ -88,7 +88,7 @@ async function releaseStock(items: Pick<OrderItem, "productId" | "quantity">[]) 
 }
 
 export async function placeOrder(input: {
-  userId: string;
+  userId: string | null;
   lines: CartLine[];
   shippingAddress: ShippingAddress;
   notes: string;

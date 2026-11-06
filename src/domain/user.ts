@@ -11,7 +11,7 @@ export interface SavedAddress {
 export interface User {
   id: string;
   name: string;
-  email: string;
+  email: string | null;
   phone: string;
   address: SavedAddress | null;
   role: UserRole;

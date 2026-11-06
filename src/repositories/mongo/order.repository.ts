@@ -32,7 +32,7 @@ const addressSchema = new Schema(
 const orderSchema = new Schema(
   {
     orderNumber: { type: String, required: true, unique: true },
-    userId: { type: Schema.Types.ObjectId, ref: "User", required: true, index: true },
+    userId: { type: Schema.Types.ObjectId, ref: "User", default: null, index: true },
     items: { type: [orderItemSchema], required: true },
     subtotal: { type: Number, required: true, min: 0 },
     shippingFee: { type: Number, required: true, min: 0 },
@@ -60,7 +60,7 @@ function toOrder(doc: OrderDoc): Order {
   return {
     id: doc._id.toString(),
     orderNumber: doc.orderNumber,
-    userId: doc.userId.toString(),
+    userId: doc.userId?.toString() ?? null,
     items: doc.items.map((i) => ({
       productId: i.productId.toString(),
       name: i.name,

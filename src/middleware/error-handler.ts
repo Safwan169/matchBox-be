@@ -7,6 +7,7 @@ export class HttpError extends Error {
   constructor(
     public status: number,
     message: string,
+    public details?: unknown,
   ) {
     super(message);
   }
@@ -29,7 +30,7 @@ export const errorHandler: ErrorRequestHandler = (err, _req, res, _next) => {
     return;
   }
   if (err instanceof HttpError) {
-    res.status(err.status).json({ error: err.message });
+    res.status(err.status).json({ error: err.message, ...(err.details === undefined ? {} : { details: err.details }) });
     return;
   }
   if (err instanceof DuplicateError) {

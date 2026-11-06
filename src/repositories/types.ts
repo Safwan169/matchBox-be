@@ -71,8 +71,10 @@ export interface UserQuery {
 
 export interface UserRepository {
   findById(id: string): Promise<User | null>;
+  findByIdWithPassword(id: string): Promise<UserWithPassword | null>;
   findByEmailWithPassword(email: string): Promise<UserWithPassword | null>;
-  /** Throws DuplicateError("email") if the email is taken. */
+  findByPhoneWithPassword(phone: string): Promise<UserWithPassword | null>;
+  /** Throws DuplicateError("email") or DuplicateError("phone") when either is taken. */
   create(data: NewUser): Promise<User>;
   update(id: string, data: UserUpdate): Promise<User | null>;
   setPasswordHash(id: string, passwordHash: string): Promise<void>;

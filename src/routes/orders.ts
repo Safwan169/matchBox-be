@@ -6,11 +6,9 @@ import { HttpError, NotFoundError } from "../middleware/error-handler.js";
 import { orderLimiter, quoteLimiter } from "../middleware/rate-limit.js";
 import { repositories } from "../repositories/index.js";
 import { changeOrderStatus, placeOrder, quoteOrder } from "../services/orders.js";
-import { bdPhone, savedAddressSchema } from "../utils/validation.js";
+import { bdPhone } from "../utils/validation.js";
 
 export const ordersRouter = Router();
-ordersRouter.use(requireAuth);
-
 const linesSchema = z
   .array(
     z.object({
@@ -23,9 +21,13 @@ const linesSchema = z
 
 const text = (max: number) => z.string().trim().max(max);
 
-const addressSchema = savedAddressSchema.extend({
+const addressSchema = z.object({
   fullName: text(80).min(2),
   phone: bdPhone,
+  addressLine: text(200).default(""),
+  area: text(80).default(""),
+  city: text(60).default("Dhaka"),
+  postalCode: text(12).default(""),
 });
 
 const quoteSchema = z.object({ items: linesSchema, city: text(60).default("") });
@@ -50,10 +52,10 @@ ordersRouter.post("/quote", quoteLimiter, async (req, res) => {
 
 ordersRouter.post("/", orderLimiter, async (req, res) => {
   const { items, shippingAddress, notes, saveAddress } = placeSchema.parse(req.body);
-  const user = req.user!;
-  const order = await placeOrder({ userId: user.id, lines: items, shippingAddress, notes });
+  const user = req.user;
+  const order = await placeOrder({ userId: user?.id ?? null, lines: items, shippingAddress, notes });
 
-  if (saveAddress) {
+  if (saveAddress && user && shippingAddress.addressLine.length >= 5) {
     const { addressLine, area, city, postalCode, phone } = shippingAddress;
     await repositories.users.update(user.id, {
       address: { addressLine, area, city, postalCode },
@@ -64,7 +66,7 @@ ordersRouter.post("/", orderLimiter, async (req, res) => {
   res.status(201).json({ data: order });
 });
 
-ordersRouter.get("/", async (req, res) => {
+ordersRouter.get("/", requireAuth, async (req, res) => {
   const { page, limit } = listSchema.parse(req.query);
   const { items, ...meta } = await repositories.orders.list({ userId: req.user!.id, page, limit });
   res.json({ data: items, meta });
@@ -79,12 +81,12 @@ async function findVisibleOrder(id: string, user: NonNullable<Express.Request["u
   return order;
 }
 
-ordersRouter.get("/:id", async (req, res) => {
-  res.json({ data: await findVisibleOrder(req.params.id, req.user!) });
+ordersRouter.get("/:id", requireAuth, async (req, res) => {
+  res.json({ data: await findVisibleOrder(req.params.id as string, req.user!) });
 });
 
-ordersRouter.post("/:id/cancel", async (req, res) => {
-  const order = await findVisibleOrder(req.params.id, req.user!);
+ordersRouter.post("/:id/cancel", requireAuth, async (req, res) => {
+  const order = await findVisibleOrder(req.params.id as string, req.user!);
   if (order.status !== "pending") {
     throw new HttpError(409, "Only pending orders can be cancelled. Please contact us.");
   }

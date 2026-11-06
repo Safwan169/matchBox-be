@@ -7,7 +7,7 @@ import { escapeRegex } from "./utils.js";
 const userSchema = new Schema(
   {
     name: { type: String, required: true, trim: true },
-    email: { type: String, required: true, unique: true, lowercase: true, trim: true },
+    email: { type: String, default: null, lowercase: true, trim: true },
     phone: { type: String, default: "" },
     passwordHash: { type: String, required: true },
     role: { type: String, enum: ["customer", "admin"], default: "customer", index: true },
@@ -25,7 +25,7 @@ const userSchema = new Schema(
       default: null,
     },
   },
-  { timestamps: true },
+  { timestamps: true, autoIndex: false },
 );
 
 type UserDoc = InferSchemaType<typeof userSchema> & {
@@ -40,7 +40,7 @@ function toUser(doc: UserDoc): User {
   return {
     id: doc._id.toString(),
     name: doc.name,
-    email: doc.email,
+    email: doc.email ?? null,
     phone: doc.phone,
     address: doc.address
       ? {
@@ -66,8 +66,17 @@ export const mongoUserRepository: UserRepository = {
     const doc = await UserModel.findById(id).lean<UserDoc>();
     return doc ? toUser(doc) : null;
   },
+  async findByIdWithPassword(id) {
+    if (!mongoose.isValidObjectId(id)) return null;
+    const doc = await UserModel.findById(id).lean<UserDoc>();
+    return doc ? ({ ...toUser(doc), passwordHash: doc.passwordHash } satisfies UserWithPassword) : null;
+  },
   async findByEmailWithPassword(email) {
     const doc = await UserModel.findOne({ email: email.toLowerCase().trim() }).lean<UserDoc>();
+    return doc ? ({ ...toUser(doc), passwordHash: doc.passwordHash } satisfies UserWithPassword) : null;
+  },
+  async findByPhoneWithPassword(phone) {
+    const doc = await UserModel.findOne({ phone }).lean<UserDoc>();
     return doc ? ({ ...toUser(doc), passwordHash: doc.passwordHash } satisfies UserWithPassword) : null;
   },
   async create(data) {
@@ -75,7 +84,10 @@ export const mongoUserRepository: UserRepository = {
       const doc = await UserModel.create(data);
       return toUser(doc.toObject() as UserDoc);
     } catch (err) {
-      if (isDuplicateKey(err)) throw new DuplicateError("email");
+      if (isDuplicateKey(err)) {
+        const keys = (err as { keyPattern?: Record<string, unknown> }).keyPattern;
+        throw new DuplicateError(keys?.phone ? "phone" : "email");
+      }
       throw err;
     }
   },

@@ -6,6 +6,7 @@ import { requireAuth } from "../middleware/auth.js";
 import { HttpError } from "../middleware/error-handler.js";
 import { authLimiter } from "../middleware/rate-limit.js";
 import { repositories } from "../repositories/index.js";
+import { DuplicateError } from "../domain/errors.js";
 import { endSession, startSession } from "../services/session.js";
 import { bdPhone, savedAddressSchema } from "../utils/validation.js";
 
@@ -15,13 +16,13 @@ const email = z.string().trim().toLowerCase().email().max(254);
 const password = z.string().min(8, "Password must be at least 8 characters").max(128);
 const registerSchema = z.object({
   name: z.string().trim().min(2).max(80),
-  email,
+  email: z.union([z.literal(""), email]).nullish().transform((v) => v || null),
   password,
   phone: bdPhone,
   dateOfBirth: z.iso.date().transform((d) => new Date(`${d}T00:00:00Z`)),
 });
 
-const loginSchema = z.object({ email, password: z.string().min(1).max(128) });
+const loginSchema = z.object({ identifier: z.string().trim().min(1).max(254), password: z.string().min(1).max(128) });
 
 const updateMeSchema = z.object({
   name: z.string().trim().min(2).max(80).optional(),
@@ -41,6 +42,9 @@ authRouter.post("/register", authLimiter, async (req, res) => {
     throw new HttpError(403, `You must be at least ${MIN_AGE} years old to register`);
   }
 
+  if (await repositories.users.findByPhoneWithPassword(data.phone)) throw new DuplicateError("phone");
+  if (data.email && await repositories.users.findByEmailWithPassword(data.email)) throw new DuplicateError("email");
+
   const user = await repositories.users.create({
     ...data,
     address: null,
@@ -54,12 +58,14 @@ authRouter.post("/register", authLimiter, async (req, res) => {
 });
 
 authRouter.post("/login", authLimiter, async (req, res) => {
-  const { email, password } = loginSchema.parse(req.body);
-  const user = await repositories.users.findByEmailWithPassword(email);
+  const { identifier, password } = loginSchema.parse(req.body);
+  const user = identifier.includes("@")
+    ? await repositories.users.findByEmailWithPassword(email.parse(identifier))
+    : await repositories.users.findByPhoneWithPassword(bdPhone.parse(identifier));
 
   // Same message for unknown email and wrong password, so accounts can't be enumerated.
   if (!user || !(await bcrypt.compare(password, user.passwordHash))) {
-    throw new HttpError(401, "Invalid email or password");
+    throw new HttpError(401, "Invalid phone/email or password");
   }
 
   const { passwordHash: _omit, ...publicUser } = user;
@@ -84,13 +90,17 @@ authRouter.get("/me", requireAuth, (req, res) => {
 
 authRouter.patch("/me", requireAuth, async (req, res) => {
   const data = updateMeSchema.parse(req.body);
+  if (data.phone) {
+    const existing = await repositories.users.findByPhoneWithPassword(data.phone);
+    if (existing && existing.id !== req.user!.id) throw new DuplicateError("phone");
+  }
   const user = await repositories.users.update(req.user!.id, data);
   res.json({ data: user });
 });
 
 authRouter.post("/change-password", requireAuth, authLimiter, async (req, res) => {
   const { currentPassword, newPassword } = changePasswordSchema.parse(req.body);
-  const user = await repositories.users.findByEmailWithPassword(req.user!.email);
+  const user = await repositories.users.findByIdWithPassword(req.user!.id);
   if (!user || !(await bcrypt.compare(currentPassword, user.passwordHash))) {
     throw new HttpError(400, "Current password is incorrect");
   }

@@ -1,9 +1,12 @@
 import { Router } from "express";
 import { z } from "zod";
 import { shopConfig } from "../config/shop.js";
+import type { NewCategory } from "../domain/category.js";
+import type { NewProduct } from "../domain/product.js";
 import { ORDER_STATUSES } from "../domain/order.js";
 import { requireAdmin } from "../middleware/auth.js";
 import { uploadLimiter } from "../middleware/rate-limit.js";
+import { DuplicateError } from "../domain/errors.js";
 import { HttpError, NotFoundError } from "../middleware/error-handler.js";
 import { repositories } from "../repositories/index.js";
 import { changeOrderStatus } from "../services/orders.js";
@@ -11,7 +14,7 @@ import { getHomeSections } from "../services/home-sections.js";
 import { refreshProductRating } from "../services/reviews.js";
 import { refreshStorefrontAfterWrites } from "../services/storefront.js";
 import { finalizeUpload, imageUpload } from "../services/uploads.js";
-import { SLUG_PATTERN, slugify } from "../utils/slugify.js";
+import { slugify } from "../utils/slugify.js";
 import { optionalBdPhone } from "../utils/validation.js";
 
 export const adminRouter = Router();
@@ -26,7 +29,6 @@ const pageSchema = {
   limit: z.coerce.number().int().min(1).max(100).default(20),
 };
 const optionalText = z.string().trim().min(1).max(100).optional();
-const slug = z.string().trim().toLowerCase().regex(SLUG_PATTERN, "Use lowercase letters, numbers and dashes");
 // Images are our own uploads or absolute https URLs.
 const imagePath = z.string().trim().regex(/^(\/(?:uploads|images)\/[\w.-]+|https:\/\/\S+)$/, "Invalid image URL");
 const money = z.number().int("Amount must be in poisha (whole number)").min(0).max(100_000_000);
@@ -55,12 +57,28 @@ adminRouter.post("/uploads", uploadLimiter, imageUpload.single("image"), async (
 
 const categorySchema = z.object({
   name: z.string().trim().min(2).max(60),
-  slug: slug.optional(),
   description: z.string().trim().max(500).default(""),
   image: imagePath.nullable().default(null),
   sortOrder: z.number().int().min(0).max(9999).default(0),
   isActive: z.boolean().default(true),
 });
+
+const normalizeName = (name: string) => name.trim().replace(/\s+/g, " ").toLocaleLowerCase();
+
+async function existingCategoryByName(name: string, exceptId?: string) {
+  const normalized = normalizeName(name);
+  return (await repositories.categories.findAll({ includeInactive: true })).find(
+    (item) => item.id !== exceptId && normalizeName(item.name) === normalized,
+  );
+}
+
+async function uniqueCategorySlug(name: string, exceptId?: string) {
+  const base = slugify(name) || "category";
+  const slugs = new Set((await repositories.categories.findAll({ includeInactive: true })).filter((item) => item.id !== exceptId).map((item) => item.slug));
+  let candidate = base;
+  for (let n = 2; slugs.has(candidate); n++) candidate = `${base.slice(0, 94)}-${n}`;
+  return candidate;
+}
 
 adminRouter.get("/categories", async (_req, res) => {
   const categories = await repositories.categories.findAll({ includeInactive: true });
@@ -70,13 +88,23 @@ adminRouter.get("/categories", async (_req, res) => {
 
 adminRouter.post("/categories", async (req, res) => {
   const data = categorySchema.parse(req.body);
-  const category = await repositories.categories.create({ ...data, slug: data.slug ?? slugify(data.name) });
+  const existing = await existingCategoryByName(data.name);
+  if (existing) throw new HttpError(409, "A category with this name already exists.", { kind: "category", item: { ...existing, productCount: await repositories.products.countByCategory(existing.id) } });
+  const category = await repositories.categories.create({ ...data, slug: await uniqueCategorySlug(data.name) });
   res.status(201).json({ data: category });
 });
 
 adminRouter.patch("/categories/:id", async (req, res) => {
   const data = categorySchema.partial().parse(req.body);
-  const category = await repositories.categories.update(req.params.id, data);
+  const current = await repositories.categories.findById(req.params.id);
+  if (!current) throw new NotFoundError("Category not found");
+  let update: Partial<NewCategory> = data;
+  if (data.name && normalizeName(data.name) !== normalizeName(current.name)) {
+    const existing = await existingCategoryByName(data.name, current.id);
+    if (existing) throw new HttpError(409, "A category with this name already exists.", { kind: "category", item: { ...existing, productCount: await repositories.products.countByCategory(existing.id) } });
+    update = { ...data, slug: await uniqueCategorySlug(data.name, current.id) };
+  }
+  const category = await repositories.categories.update(current.id, update);
   if (!category) throw new NotFoundError("Category not found");
   res.json({ data: category });
 });
@@ -94,7 +122,6 @@ adminRouter.delete("/categories/:id", async (req, res) => {
 
 const productSchema = z.object({
   name: z.string().trim().min(2).max(120),
-  slug: slug.optional(),
   description: z.string().trim().max(5000).default(""),
   categoryId: z.string().min(1),
   brand: z.string().trim().max(80).default(""),
@@ -108,6 +135,24 @@ const productSchema = z.object({
   isActive: z.boolean().default(true),
   sortOrder: z.number().int().min(0).max(1_000_000).optional(),
 });
+
+async function existingProductByName(name: string, exceptId?: string) {
+  const normalized = normalizeName(name);
+  const matches = await repositories.products.list({ search: name.trim(), status: "all", sort: "name_asc", page: 1, limit: 100 });
+  return matches.items.find((item) => item.id !== exceptId && normalizeName(item.name) === normalized);
+}
+
+async function createProductWithUniqueSlug(data: Omit<NewProduct, "slug">) {
+  const base = slugify(data.name) || "product";
+  for (let n = 1; n <= 1000; n++) {
+    try {
+      return await repositories.products.create({ ...data, slug: n === 1 ? base : `${base.slice(0, 94)}-${n}` });
+    } catch (err) {
+      if (!(err instanceof DuplicateError) || err.field !== "slug" || n === 1000) throw err;
+    }
+  }
+  throw new HttpError(409, "Could not generate a unique product URL. Please try again.");
+}
 
 async function assertCategoryExists(categoryId: string | undefined) {
   if (categoryId && !(await repositories.categories.findById(categoryId))) {
@@ -149,7 +194,9 @@ adminRouter.get("/products/:id", async (req, res) => {
 adminRouter.post("/products", async (req, res) => {
   const data = productSchema.parse(req.body);
   await assertCategoryExists(data.categoryId);
-  const product = await repositories.products.create({ ...data, slug: data.slug ?? slugify(data.name) });
+  const existing = await existingProductByName(data.name);
+  if (existing) throw new HttpError(409, "A product with this name already exists.", { kind: "product", item: existing });
+  const product = await createProductWithUniqueSlug(data);
   res.status(201).json({ data: product });
 });
 
@@ -170,7 +217,27 @@ adminRouter.patch("/products/:id", async (req, res) => {
     .partial()
     .parse(req.body);
   await assertCategoryExists(data.categoryId);
-  const product = await repositories.products.update(req.params.id, data);
+  const current = await repositories.products.findById(req.params.id);
+  if (!current) throw new NotFoundError("Product not found");
+  let update: Partial<NewProduct> = data;
+  if (data.name && normalizeName(data.name) !== normalizeName(current.name)) {
+    const existing = await existingProductByName(data.name, current.id);
+    if (existing) throw new HttpError(409, "A product with this name already exists.", { kind: "product", item: existing });
+    const base = slugify(data.name) || "product";
+    for (let n = 1; n <= 1000; n++) {
+      const candidate = n === 1 ? base : `${base.slice(0, 94)}-${n}`;
+      try {
+        update = { ...data, slug: candidate };
+        const changed = await repositories.products.update(current.id, update);
+        if (!changed) throw new NotFoundError("Product not found");
+        res.json({ data: changed });
+        return;
+      } catch (err) {
+        if (!(err instanceof DuplicateError) || err.field !== "slug" || n === 1000) throw err;
+      }
+    }
+  }
+  const product = await repositories.products.update(current.id, update);
   if (!product) throw new NotFoundError("Product not found");
   res.json({ data: product });
 });
@@ -198,7 +265,7 @@ adminRouter.get("/orders", async (req, res) => {
 adminRouter.get("/orders/:id", async (req, res) => {
   const order = await repositories.orders.findById(req.params.id);
   if (!order) throw new NotFoundError("Order not found");
-  const customer = await repositories.users.findById(order.userId);
+  const customer = order.userId ? await repositories.users.findById(order.userId) : null;
   res.json({ data: { ...order, customer } });
 });
 
