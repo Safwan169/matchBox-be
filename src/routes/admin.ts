@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { z } from "zod";
 import { shopConfig } from "../config/shop.js";
+import { env } from "../config/env.js";
 import type { NewCategory } from "../domain/category.js";
 import type { NewProduct } from "../domain/product.js";
 import { ORDER_STATUSES } from "../domain/order.js";
@@ -51,6 +52,92 @@ adminRouter.get("/stats", async (_req, res) => {
 adminRouter.post("/uploads", uploadLimiter, imageUpload.single("image"), async (req, res) => {
   const url = await finalizeUpload(req.file);
   res.status(201).json({ data: { url } });
+});
+
+// ---------- Facebook Page publishing ----------
+
+adminRouter.get("/facebook-posts/status", (_req, res) => {
+  res.json({ data: { configured: !!(env.FACEBOOK_PAGE_ID && env.FACEBOOK_PAGE_ACCESS_TOKEN), pageId: env.FACEBOOK_PAGE_ID ?? null, storeUrl: env.FACEBOOK_STORE_URL ?? "https://match-box.vercel.app" } });
+});
+
+adminRouter.get("/facebook-posts", async (_req, res) => {
+  res.json({ data: await repositories.facebookPosts.list(50) });
+});
+
+adminRouter.delete("/facebook-posts/:id", async (req, res) => {
+  if (!env.FACEBOOK_PAGE_ACCESS_TOKEN) throw new HttpError(503, "Facebook publishing is not configured.");
+  const post = await repositories.facebookPosts.findById(req.params.id as string);
+  if (!post) throw new NotFoundError("Facebook post was not found in the dashboard history.");
+
+  const deleteUrl = new URL(`https://graph.facebook.com/${env.FACEBOOK_GRAPH_API_VERSION}/${encodeURIComponent(post.facebookPostId)}`);
+  deleteUrl.searchParams.set("access_token", env.FACEBOOK_PAGE_ACCESS_TOKEN);
+  const response = await fetch(deleteUrl, { method: "DELETE" });
+  const result = await response.json().catch(() => null) as { success?: boolean; error?: { message?: string } } | null;
+  if (!response.ok || result?.success !== true) {
+    throw new HttpError(502, result?.error?.message ? `Facebook could not delete the post: ${result.error.message}` : "Facebook could not delete this post. Check the Page permissions and try again.");
+  }
+
+  await repositories.facebookPosts.delete(post.id);
+  res.status(204).end();
+});
+
+adminRouter.post("/facebook-posts", async (req, res) => {
+  const { productIds, message } = z.object({
+    productIds: z.array(z.string().min(1)).min(1).max(10),
+    message: z.string().trim().max(2000).default(""),
+  }).parse(req.body);
+  if (new Set(productIds).size !== productIds.length) throw new HttpError(400, "Select each product only once.");
+  if (!env.FACEBOOK_PAGE_ID || !env.FACEBOOK_PAGE_ACCESS_TOKEN) {
+    throw new HttpError(503, "Facebook publishing is not configured. Add the Page ID and Page access token to the backend environment.");
+  }
+
+  const products = await repositories.products.findByIds(productIds);
+  const productById = new Map(products.map((product) => [product.id, product]));
+  const ordered = productIds.map((id) => productById.get(id));
+  if (ordered.some((product) => !product)) throw new HttpError(404, "One or more selected products could not be found.");
+  const selected = ordered as NonNullable<(typeof ordered)[number]>[];
+  const unavailable = selected.find((product) => !product.isActive || !product.images[0]);
+  if (unavailable) throw new HttpError(400, `${unavailable.name} needs to be visible in the store and have a primary image before it can be posted.`);
+
+  const storefrontUrl = new URL(env.FACEBOOK_STORE_URL ?? "https://match-box.vercel.app").origin + "/";
+  const publicImageUrl = (image: string) => {
+    if (/^https:\/\//i.test(image)) return image;
+    if (image.startsWith("/uploads/")) return new URL(`/backend${image}`, storefrontUrl).toString();
+    return new URL(image, storefrontUrl).toString();
+  };
+  const attachments = selected.map((product) => ({
+    link: new URL(`/products/${encodeURIComponent(product.slug)}`, storefrontUrl).toString(),
+    picture: publicImageUrl(product.images[0]),
+    name: product.name,
+  }));
+  const body = new URLSearchParams({
+    access_token: env.FACEBOOK_PAGE_ACCESS_TOKEN,
+    message,
+    link: storefrontUrl,
+    child_attachments: JSON.stringify(attachments),
+  });
+  const graphStartedAt = Date.now();
+  const graphResponse = await fetch(`https://graph.facebook.com/${env.FACEBOOK_GRAPH_API_VERSION}/${env.FACEBOOK_PAGE_ID}/feed`, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body,
+  });
+  const result = await graphResponse.json().catch(() => null) as { id?: string; error?: { message?: string } } | null;
+  if (!graphResponse.ok || !result?.id) {
+    const graphMessage = result?.error?.message;
+    console.error("[facebook] Page post failed", { status: graphResponse.status, productCount: selected.length, graphDurationMs: Date.now() - graphStartedAt, message: graphMessage });
+    throw new HttpError(502, graphMessage ? `Facebook rejected the post: ${graphMessage}` : "Facebook could not publish this post. Check the Page permissions and try again.");
+  }
+  console.info("[facebook] Page post published", { productCount: selected.length, graphDurationMs: Date.now() - graphStartedAt });
+  const postUrl = `https://www.facebook.com/${result.id}`;
+  const savedPost = await repositories.facebookPosts.create({
+    facebookPostId: result.id,
+    postUrl,
+    productIds: selected.map((product) => product.id),
+    productNames: selected.map((product) => product.name),
+    message,
+  });
+  res.status(201).json({ data: { postId: result.id, postUrl, productCount: selected.length, history: savedPost } });
 });
 
 // ---------- Categories ----------

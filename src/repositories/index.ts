@@ -1,5 +1,6 @@
 import { env } from "../config/env.js";
 import type { Repositories } from "./types.js";
+import { mongoFacebookPostRepository } from "./mongo/facebook-post.repository.js";
 import { mongoCategoryRepository } from "./mongo/category.repository.js";
 import { mongoOrderRepository } from "./mongo/order.repository.js";
 import { mongoSettingsRepository } from "./mongo/settings.repository.js";
@@ -16,6 +17,7 @@ import { postgresReviewRepository } from "./postgres/review.repository.js";
 import { postgresHomeSectionRepository } from "./postgres/home-section.repository.js";
 import { postgresProductRepository } from "./postgres/product.repository.js";
 import { postgresUserRepository } from "./postgres/user.repository.js";
+import { postgresFacebookPostRepository } from "./postgres/facebook-post.repository.js";
 
 // The only place that decides which database implementation is used.
 export const repositories: Repositories =
@@ -29,6 +31,7 @@ export const repositories: Repositories =
         promotions: postgresPromotionRepository,
         reviews: postgresReviewRepository,
         homeSections: postgresHomeSectionRepository,
+        facebookPosts: postgresFacebookPostRepository,
       }
     : {
         products: mongoProductRepository,
@@ -39,4 +42,5 @@ export const repositories: Repositories =
         promotions: mongoPromotionRepository,
         reviews: mongoReviewRepository,
         homeSections: mongoHomeSectionRepository,
+        facebookPosts: mongoFacebookPostRepository,
       };

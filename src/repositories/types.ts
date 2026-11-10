@@ -1,4 +1,5 @@
 import type { Category, NewCategory } from "../domain/category.js";
+import type { FacebookPost, NewFacebookPost } from "../domain/facebook-post.js";
 import type { NewOrder, Order, OrderStatus, PaymentStatus } from "../domain/order.js";
 import type { Paginated } from "../domain/pagination.js";
 import type { StoreSettings, StoreSettingsUpdate } from "../domain/settings.js";
@@ -159,6 +160,13 @@ export interface HomeSectionRepository {
   reorder(ids: string[]): Promise<void>;
 }
 
+export interface FacebookPostRepository {
+  create(data: NewFacebookPost): Promise<FacebookPost>;
+  list(limit: number): Promise<FacebookPost[]>;
+  findById(id: string): Promise<FacebookPost | null>;
+  delete(id: string): Promise<boolean>;
+}
+
 export interface Repositories {
   products: ProductRepository;
   categories: CategoryRepository;
@@ -168,4 +176,5 @@ export interface Repositories {
   promotions: PromotionRepository;
   reviews: ReviewRepository;
   homeSections: HomeSectionRepository;
+  facebookPosts: FacebookPostRepository;
 }

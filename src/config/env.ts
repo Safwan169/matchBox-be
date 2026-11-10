@@ -1,6 +1,15 @@
 import "dotenv/config";
 import { z } from "zod";
 
+const optionalNonBlank = z.preprocess(
+  (value) => (typeof value === "string" && value.trim() === "" ? undefined : value),
+  z.string().trim().min(1).optional(),
+);
+const optionalUrl = z.preprocess(
+  (value) => (typeof value === "string" && value.trim() === "" ? undefined : value),
+  z.string().url().refine((value) => value.startsWith("https://"), "FACEBOOK_STORE_URL must use https").optional(),
+);
+
 const envSchema = z.object({
   PORT: z.coerce.number().default(4000),
   NODE_ENV: z.enum(["development", "production", "test"]).default("development"),
@@ -30,6 +39,11 @@ const envSchema = z.object({
   ADMIN_EMAIL: z.string().trim().toLowerCase().email().optional(),
   ADMIN_PASSWORD: z.string().min(8, "ADMIN_PASSWORD must be at least 8 characters").optional(),
   ADMIN_NAME: z.string().trim().min(2).default("Admin"),
+  // Facebook Page publishing. Keep the Page token in the backend environment only.
+  FACEBOOK_PAGE_ID: optionalNonBlank,
+  FACEBOOK_PAGE_ACCESS_TOKEN: optionalNonBlank,
+  FACEBOOK_GRAPH_API_VERSION: z.string().regex(/^v\d+\.\d+$/).default("v27.0"),
+  FACEBOOK_STORE_URL: optionalUrl,
   DB_CLIENT: z.enum(["mongo", "postgres"]).default("mongo"),
   MONGO_URI: z.string().optional(),
   DATABASE_URL: z.string().optional(),
